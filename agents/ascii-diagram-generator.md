@@ -1,3 +1,20 @@
+---
+description: "Create, convert, or enhance diagrams using Unicode box-drawing characters and ASCII art"
+whenToUse: "Use when diagrams are needed for plain-text environments (terminal, code comments, txt files) or when Mermaid rendering is unavailable"
+capabilities:
+  - Create flowcharts, sequence diagrams, trees, tables, and architecture diagrams
+  - Convert Mermaid or PlantUML to ASCII
+  - Clean up rough ASCII sketches
+  - Multiple character sets (light, heavy, double, rounded, ASCII-only)
+  - Validate alignment and monospace rendering
+tools:
+  - Read
+  - Write
+model: sonnet
+color: blue
+mode: best-effort
+---
+
 # ASCII Diagram Generator Agent
 
 ## Role

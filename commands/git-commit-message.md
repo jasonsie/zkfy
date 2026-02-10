@@ -47,9 +47,9 @@ git status
 
 Analyze staged changes and generate a conventional commit message following best practices.
 
-### Agent Reference
+### Commit Generation
 
--  **Agent**: `.agents/git-commit-agent` (see `git-commit-agent.md`)
+-  **Logic**: Conventional commit format (see requirements below)
 -  **Purpose**: Generate high-quality conventional commit messages
 
 ### Commit Message Requirements
@@ -84,17 +84,16 @@ Following conventional commit format:
 
 ### Execution Steps
 
-**Use git-commit-agent:**
+**Commit generation steps:**
 
 ```
-Invoke git-commit-agent with:
-- Analyze: git diff --staged
-- Generate: Conventional commit message
-- Execute: git commit -m "<generated message>"
-- Validate: Commit created successfully
+1. Analyze: git diff --staged
+2. Generate: Conventional commit message
+3. Execute: git commit -m "<generated message>"
+4. Validate: Commit created successfully
 ```
 
-**Agent handles:**
+**Commit generation handles:**
 
 1. Analysis of staged changes
 2. Pattern detection (new files, modifications, deletions)
@@ -161,7 +160,7 @@ git push
                ▼
 ┌─────────────────────────────────────┐
 │  Phase 2: Commit                    │
-│  Agent: git-commit-agent            │
+│  Logic: Conventional commit format  │
 │  Analyze: Staged changes            │
 │  Generate: Commit message           │
 │  Execute: git commit                │
@@ -232,7 +231,7 @@ Phase 3 - Push:
 
 ### Multiple Unrelated Changes
 
-If git-commit-agent detects multiple unrelated changes:
+If analysis detects multiple unrelated changes:
 
 -  Pause workflow
 -  Present detected change groups
@@ -255,7 +254,7 @@ git push --force-with-lease
 
 1. All phases execute sequentially (Phase 1 → Phase 2 → Phase 3)
 2. Each phase has clear success criteria for validation
-3. Phase 2 uses git-commit-agent for consistent message quality
+3. Phase 2 uses conventional commit format for consistent message quality
 4. Automatic staging of all changes (no selective staging)
 5. Push happens immediately after successful commit
 6. Rebase strategy preferred over merge for remote conflicts
@@ -268,7 +267,7 @@ git push --force-with-lease
 
 ```bash
 git add .
-# (git-commit-agent generates message)
+# (conventional commit message generated)
 git commit -m "<generated>"
 git push
 ```

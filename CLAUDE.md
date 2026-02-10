@@ -111,10 +111,29 @@ Read and follow: ~/.claude/agents/video-transcript-extractor.md
 ### Creating a New Agent
 
 1. Create file: `agents/<agent-name>.md`
-2. Include sections: Role, Terminal Colors, Input, Output, Procedure, Error Handling
-3. Use numbered steps with progress indicators: `[N/M] Step...`
-4. Define ABORT conditions for strict failure mode if applicable
-5. Document all dependencies (tools, external files)
+2. Add YAML frontmatter with required fields:
+   ```yaml
+   ---
+   description: "Brief description of what the agent does"
+   whenToUse: "When this agent should be invoked"
+   capabilities:
+     - Capability 1
+     - Capability 2
+   tools:
+     - Read
+     - Write
+   model: sonnet          # sonnet | opus | haiku
+   color: blue            # blue | green | cyan | magenta | yellow | red
+   mode: best-effort      # strict | best-effort
+   externalDependencies:  # optional
+     - "~/.claude/prompts/my-prompt.md"
+   ---
+   ```
+3. Include body sections: Role, Terminal Colors, Input, Output, Procedure, Error Handling
+4. Use numbered steps with progress indicators: `[N/M] Step...`
+5. Define ABORT conditions for strict failure mode if applicable
+6. Error Handling must be a table with Issue, Action, and Terminal Output columns
+7. Document all dependencies (tools, external files) in frontmatter
 
 ### Creating a New Command
 
@@ -337,7 +356,9 @@ Git workflow components use conventional commit format:
 │   ├── ascii-diagram-generator.md
 │   ├── diagram-generator.md
 │   ├── markdown-file-generator.md
-│   └── doc-updater.md
+│   └── agent-creator/
+│       └── commands/
+│           └── create-agent.md
 ├── commands/          # Workflow documentation (reference material)
 │   ├── git-commit-message.md
 │   └── source-to-zk.md
@@ -376,10 +397,11 @@ Git workflow components use conventional commit format:
 ### Updating an Agent
 
 1. Locate agent file: `agents/<agent-name>.md`
-2. Maintain section structure (Role, Input, Output, Procedure)
-3. Update Terminal Colors section if changing output format
-4. Test with skills that reference this agent
-5. Update version or changelog if agent has breaking changes
+2. Update YAML frontmatter fields if capabilities, tools, or mode change
+3. Maintain body section structure (Role, Terminal Colors, Input, Output, Procedure, Error Handling)
+4. Update Terminal Colors section if changing output format
+5. Test with skills that reference this agent
+6. Update version or changelog if agent has breaking changes
 
 ### Updating Hook Templates
 

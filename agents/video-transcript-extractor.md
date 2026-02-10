@@ -1,3 +1,23 @@
+---
+description: "Extract video transcripts and metadata using yt-dlp, producing clean Markdown files"
+whenToUse: "Use when a video URL needs to be converted into a text transcript for further processing"
+capabilities:
+  - Validate video URLs via yt-dlp
+  - Extract video metadata (title, channel, duration, language)
+  - Download and parse subtitle tracks (VTT/SRT)
+  - Clean transcript text (dedup, join paragraphs, remove timestamps)
+  - Produce structured Markdown output
+tools:
+  - Bash
+  - Read
+  - Write
+model: sonnet
+color: magenta
+mode: strict
+externalDependencies:
+  - yt-dlp
+---
+
 # Video Transcript Extractor Agent
 
 ## Role

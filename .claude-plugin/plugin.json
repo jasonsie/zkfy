@@ -1,0 +1,16 @@
+{
+   "name": "zkfy",
+   "version": "1.0.0",
+   "description": "transform unstructured text into structured Zettelkasten notes with metadata and links",
+   "author": {
+      "name": "Jason"
+   },
+   "license": "MIT",
+   "keywords": [
+      "zettelkasten",
+      "knowledge-management",
+      "content-extraction",
+      "diagrams",
+      "automation"
+   ]
+}

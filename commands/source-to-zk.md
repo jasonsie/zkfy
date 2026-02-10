@@ -1,3 +1,7 @@
+---
+description: "Complete pipeline from any source (URL, text, file) to an integrated Zettelkasten literature note"
+---
+
 # Source to Zettelkasten
 
 Create a well-formed Zettelkasten literature note from an external source.

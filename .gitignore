@@ -26,15 +26,14 @@ $RECYCLE.BIN/
 .classpath
 
 # Claude Code local files
-.claude/projects/
-.claude/settings.local.json
-.claude/*.log
+.claude/*
 
 # Temporary files
 *.tmp
 *.temp
 *.log
 *.cache
+reference/*
 
 # Node modules (if any JS tooling is added)
 node_modules/

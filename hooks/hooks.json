@@ -3,50 +3,14 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "tool == \"Bash\" && tool_input.command matches \"pattern\"",
+        "matcher": "(tool == \"Write\" || tool == \"Edit\") && tool_input.file_path matches \"\\.md$\"",
         "hooks": [
           {
             "type": "command",
-            "command": "#!/bin/bash\ninput=$(cat)\n# Add validation or modification logic here\necho \"$input\""
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-zk-structure.sh"
           }
         ],
-        "description": "Template: validate or modify before bash execution"
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "tool == \"Edit\"",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "#!/bin/bash\ninput=$(cat)\n# Add post-processing logic here\necho \"$input\""
-          }
-        ],
-        "description": "Template: process after file edits"
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "#!/bin/bash\n# Session initialization logic\necho \"Session started\" >&2"
-          }
-        ],
-        "description": "Template: runs when session starts"
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "#!/bin/bash\n# Session cleanup logic\necho \"Session ended\" >&2"
-          }
-        ],
-        "description": "Template: runs when session ends"
+        "description": "Validate ZK folder structure and redirect notes to /output if structure is invalid"
       }
     ]
   }

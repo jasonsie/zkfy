@@ -1,30 +1,22 @@
 {
-  "name": "zkfy",
-  "displayName": "Zkfy - Zettelkasten Transformer",
-  "description": "Transform unstructured content (URLs, videos, text) into structured Zettelkasten literature notes with metadata, backlinks, and automatic MOC integration.",
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zkfy-marketplace",
   "version": "1.0.0",
-  "author": {
-    "name": "Jason"
+  "description": "Marketplace for zkfy plugin - Transform unstructured content into structured Zettelkasten literature notes",
+  "owner": {
+    "name": "Jason",
+    "email": "polyklietoscanon@gmail.com"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jasonsie/zkfy"
-  },
-  "license": "MIT",
-  "keywords": [
-    "zettelkasten",
-    "knowledge-management",
-    "content-extraction",
-    "obsidian",
-    "diagrams",
-    "automation",
-    "note-taking",
-    "literature-notes"
-  ],
-  "categories": [
-    "productivity",
-    "knowledge-management",
-    "automation"
-  ],
-  "readme": "README.md"
+  "plugins": [
+    {
+      "name": "zkfy",
+      "description": "Transform unstructured content (URLs, videos, text) into structured Zettelkasten literature notes with metadata, backlinks, and automatic MOC integration.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jason"
+      },
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
 }

@@ -26,10 +26,10 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ZETTELKASTEN INTEGRA
 
 ### Specialized Agents
 
-- **video-transcript-extractor**: Fetches video transcripts
-- **markdown-file-generator**: Extracts and converts content
-- **diagram-generator**: Creates Mermaid diagrams for complex concepts
-- **zettelkasten-integrator**: Handles vault integration, frontmatter, and linking
+- **video-agent**: Fetches video transcripts
+- **markdown-file-agent**: Extracts and converts content
+- **diagram-agent**: Creates Mermaid diagrams for complex concepts
+- **zettelkasten-agent**: Handles vault integration, frontmatter, and linking
 
 ### Smart Features
 
@@ -184,11 +184,11 @@ zkfy/
 ├── commands/
 │   └── source-to-zk.md     # Main orchestration command
 ├── agents/
-│   ├── video-transcript-extractor.md
-│   ├── markdown-file-generator.md
-│   ├── diagram-generator.md
-│   ├── ascii-diagram-generator.md
-│   └── zettelkasten-integrator.md
+│   ├── video-agent.md
+│   ├── markdown-file-agent.md
+│   ├── diagram-agent.md
+│   ├── ascii-diagram-agent.md
+│   └── zettelkasten-agent.md
 ├── skills/
 │   └── terminal-colors/    # Reusable output formatting
 └── hooks/
@@ -200,8 +200,8 @@ zkfy/
 
 Agents are specialized workers that can delegate to other agents:
 
-- `markdown-file-generator` may delegate to `diagram-generator` for visualizations
-- `zettelkasten-integrator` may delegate to `diagram-generator` for abstract visuals
+- `markdown-file-agent` may delegate to `diagram-agent` for visualizations
+- `zettelkasten-agent` may delegate to `diagram-agent` for abstract visuals
 - Each agent has a single, clear purpose and standardized output formatting
 
 ### Error Handling

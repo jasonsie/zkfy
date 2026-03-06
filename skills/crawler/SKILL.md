@@ -63,7 +63,7 @@ Apply crawler.prompt.md rules:
 - **SVG**: Wrap in fenced code block
 - **Images**: Keep URLs with alt text
 - **Links**: Convert to inline format `[text](url)`
-- **Diagrams**: For complex diagrams, delegate to diagram-generator agent
+- **Diagrams**: For complex diagrams, delegate to diagram-agent agent
 
 Ensure zero data loss—include all content from source.
 

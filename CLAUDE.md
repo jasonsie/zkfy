@@ -13,26 +13,33 @@ This is **zkfy**, a Claude Code plugin that transforms unstructured content (URL
 The core workflow follows this execution model:
 
 ```
-INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ZETTELKASTEN INTEGRATION → OUTPUT
+INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → OUTPUT
 ```
 
 1. **Input Detection**: Classify source as VIDEO_URL, WEB_URL, or TEXT
-2. **Phase 0 (Conditional)**: Extract video transcripts using `video-transcript-extractor` agent
-3. **Phase 1**: Convert content to clean Markdown using `markdown-file-generator` agent
-4. **Phase 2**: Integrate into vault using `zettelkasten-integrator` agent
+2. **Phase 0 (Conditional)**: Extract video transcripts using `video-agent` agent
+3. **Phase 1**: Convert content to clean Markdown using `markdown-file-agent` agent
+4. **Phase 2**: Integrate into vault using `zk-note` skill, which orchestrates:
+   - `zettelkasten-agent` (Opus) — concept analysis, synthesis, relationship reasoning
+   - `obsidian-formatter-agent` (Sonnet) — filename, frontmatter, navigation, MOCs, file writing
 
 ### Agent Hierarchy
 
 Agents are specialized, single-purpose workers that can delegate to other agents:
 
-- **video-transcript-extractor**: Fetches video transcripts (YouTube, Vimeo)
-- **markdown-file-generator**: Extracts and converts content to Markdown
-  - May delegate to `diagram-generator` for complex visualizations
-- **diagram-generator**: Creates Mermaid diagrams for Obsidian rendering
-- **ascii-diagram-generator**: Creates ASCII diagrams for plain-text contexts
-- **zettelkasten-integrator**: Final integration into vault structure
-  - May delegate to `diagram-generator` for visual aids
-  - Handles frontmatter, backlinks, MOC updates, navigation links
+- **video-agent**: Fetches video transcripts (YouTube, Vimeo)
+- **markdown-file-agent**: Extracts and converts content to Markdown
+  - May delegate to `diagram-agent` for complex visualizations
+- **diagram-agent**: Creates Mermaid diagrams for Obsidian rendering
+- **ascii-diagram-agent**: Creates ASCII diagrams for plain-text contexts
+- **zettelkasten-agent**: Deep content analysis through Zettelkasten principles
+  - Identifies atomic concept, domain classification, key insights
+  - Writes Feynman-style explanations and code examples
+  - Discovers semantic relationships with existing vault notes
+- **obsidian-formatter-agent**: Vault formatting and integration
+  - Generates Train-Case filenames, frontmatter, note body structure
+  - Discovers and updates Before/Next neighbors
+  - Updates MOCs, writes the final note file
 
 ### Component Structure
 

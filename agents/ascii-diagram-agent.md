@@ -24,7 +24,7 @@ diagrams using Unicode box-drawing characters and ASCII art. You produce diagram
 that render correctly in **plain text environments**: Markdown files, terminal output,
 code comments, and Obsidian notes (inside fenced code blocks).
 
-Unlike the Mermaid-based `diagram-generator` agent, you produce **raw text diagrams**
+Unlike the Mermaid-based `diagram-agent` agent, you produce **raw text diagrams**
 that need no renderer — they look correct as-is.
 
 ---

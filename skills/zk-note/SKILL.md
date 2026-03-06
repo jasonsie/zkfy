@@ -5,7 +5,7 @@ description: Transform markdown files into fully integrated Zettelkasten literat
 
 # ZK-Note
 
-Transform markdown into fully integrated Zettelkasten literature note.
+Transform markdown into a fully integrated Zettelkasten literature note.
 
 ## Input
 
@@ -13,133 +13,101 @@ $ARGUMENTS — <path-to-markdown-file> [domain]
 
 Optional domain: cs/web/ai/principle/devops/math
 
-## Workflow
+## Execution Order
 
-This workflow follows these steps:
+This skill orchestrates two agents in sequence:
 
-1. Read formatting rules
-2. Read source & determine domain
-3. Analyze content & structure note
-4. Create frontmatter with navigation
-5. Add content elements
-6. Create backlinks
-7. Update MOCs
-8. Cleanup
-
-## Execution
-
-### Step 1: Read Formatting Rules
-
-Read the Zettelkasten rules from:
-`/Users/jason/Desktop/claude/prompts/obsidian-note.prompt.md`
-
-Follow these rules throughout the integration process.
-
-### Step 2: Read Source & Determine Domain
-
-Read the markdown file from the provided path.
-
-**Determine domain:**
-- If provided in arguments → use it
-- Otherwise → analyze content and suggest domain
-- If unclear → ask user to specify
-
-Domain folders: `cs/`, `web/`, `ai/`, `principle/`, `devops/`, `math/`
-
-### Step 3: Analyze & Structure
-
-Extract the core concept (one atomic idea per note).
-
-Generate Train-Case filename:
-- Pattern: `Domain-Concept-Name-In-Train-Case.md`
-- Domain prefix: `cs/`→`CS-`, `web/`→`Web-`, etc.
-- Example: `Web-React-Server-Components.md`
-
-Plan note structure:
-- **Abstract** (bullets OR diagram + 1-2 sentences)
-- **Content sections** (one aspect per section)
-- **Links** (backlinks with explanations)
-
-### Step 4: Create Frontmatter
-
-Required YAML frontmatter:
-```yaml
----
-Date: YYYY-MM-DD
-Type: literature
-Categories: []
-Sub-Categories: []
-Aliases: []
-Before: '[[Domain-Previous-Note]]'
-Next: '[[Domain-Next-Note]]'
-Link: '<source-url>'
-Src: '[[zz.original-source/src-file]]'
----
+```
+Source File
+    │
+    ▼
+┌─────────────────────────┐
+│  zettelkasten-agent      │  Opus — deep reasoning
+│  (analyze & synthesize)  │
+│                          │
+│  → atomic concept        │
+│  → domain classification │
+│  → Feynman explanations  │
+│  → relationship rationale│
+└──────────┬──────────────┘
+           │ analysis results
+           ▼
+┌─────────────────────────┐
+│  obsidian-formatter-agent│  Sonnet — mechanical
+│  (format & integrate)    │
+│                          │
+│  → Train-Case filename   │
+│  → frontmatter + nav     │
+│  → assemble note file    │
+│  → update neighbors      │
+│  → update MOCs           │
+└──────────┬──────────────┘
+           │
+           ▼
+      Cleanup & Report
 ```
 
-**Calculate Before/Next:**
-- List notes in domain folder
-- Sort alphabetically
-- Find insertion point
-- Set Before to previous note, Next to following note
+### Step 1: Read Source
 
-### Step 5: Add Content Elements
+Read the markdown file from the provided path. Extract the source URL if present in the file.
 
-**Abstract section:**
-- Brief text (2-3 Feynman sentences) OR
-- ASCII diagram + 1-2 sentences
+### Step 2: Delegate to zettelkasten-agent (Analysis)
 
-**Content sections:**
-- One aspect per section
-- Rewrite in your own words (Feynman Technique)
-- For programming topics: include code examples
+Use the Task tool to delegate to `general-purpose` subagent:
 
-**Code examples pattern:**
-```markdown
-❌ Bad: <problematic code>
-✅ Good: <better code>
+```
+Prompt: "You are delegated to act as the zettelkasten-agent agent.
+
+Read the agent instructions at: ~/.claude/agents/zettelkasten-agent.md
+
+Then analyze this source content for Zettelkasten integration:
+Source file: <path>
+Vault root: <vault_root>
+[Domain: <domain> — if provided by user]
+
+Return a structured analysis:
+- domain
+- concept (atomic concept name)
+- key_insights (bullet points)
+- source_url
+- abstract (formatted abstract section)
+- content_sections (fully written sub-sections with Feynman explanations and code examples)
+- related_notes (list of [[Note]] — rationale pairs)"
 ```
 
-Use TypeScript when applicable.
+If the zettelkasten-agent asks about domain, relay the question to the user.
 
-**Diagrams:** For visual aids, delegate to diagram-generator agent.
+### Step 3: Delegate to obsidian-formatter-agent (Integration)
 
-### Step 6: Create Backlinks
+Use the Task tool to delegate to `general-purpose` subagent:
 
-Scan vault for related notes using Grep tool.
+```
+Prompt: "You are delegated to act as the obsidian-formatter-agent agent.
 
-Add backlinks in Links section:
-```markdown
-### Links
+Read the agent instructions at: ~/.claude/agents/obsidian-formatter-agent.md
+Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
 
-- Related to [[Note-Name]] because <explanation>
-- Contrasts with [[Other-Note]] because <explanation>
-- Leads to [[Advanced-Topic]] because <explanation>
+Then format and integrate this literature note:
+
+Domain: <domain from step 2>
+Concept: <concept from step 2>
+Abstract: <abstract from step 2>
+Content sections: <content_sections from step 2>
+Related notes: <related_notes from step 2>
+Source URL: <source_url from step 2>
+Source file: <source_file>
+Today's date: <today's date>
+Vault root: <vault_root>
+
+Return:
+- Note path and filename
+- Neighbors updated
+- MOCs updated"
 ```
 
-Patterns: Related to, Contrasts with, Leads to, Part of, Example of
+### Step 4: Cleanup & Report
 
-### Step 7: Update Navigation
-
-Update neighbor files' frontmatter:
-
-**If Before note exists:**
-- Update its `Next: '[[new-note]]'` field
-
-**If Next note exists:**
-- Update its `Before: '[[new-note]]'` field
-
-### Step 8: Update MOCs
-
-Find relevant MOC in `000.Index/`:
-- Search for MOC matching note's domain/topic
-- If found: Add wiki-link to new note in appropriate section
-- If not found: Ask user to create new MOC or skip
-- Maintain alphabetical or logical ordering
-
-### Step 9: Cleanup
-
-Delete source file from `zz.original-source/`.
+Delete the source file from `zz.original-source/`.
 
 Report completion:
 ```
@@ -159,18 +127,25 @@ Report completion:
 
 ## Error Handling
 
-**File not found:**
+**Source file not found:**
 - Report the path that was tried
 - Ask user to verify path
 
-**Domain unclear:**
+**Domain unclear (from zettelkasten-agent):**
 - Present content summary
 - Ask user to specify domain from: cs/web/ai/principle/devops/math
 
+**Analysis fails:**
+- Report error from zettelkasten-agent
+- Abort workflow
+
+**Formatting fails:**
+- Report error from obsidian-formatter-agent
+- Note: analysis is not lost, user can retry step 3
+
 **No related notes found:**
-- Create note anyway
+- Proceed — Links section will be empty
 - Warn user that no backlinks were added
-- Suggest manual linking
 
 **MOC missing:**
 - Ask user: "Create new MOC or skip MOC update?"

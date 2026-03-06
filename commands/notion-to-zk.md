@@ -166,15 +166,15 @@ Assemble:
 
 **Update task**: Mark "Integrate into Zettelkasten" as `in_progress`
 
-**Read agent**: `~/.claude/agents/zettelkasten-integrator.md`
+**Read agent**: `~/.claude/agents/zettelkasten-agent.md`
 **Read prompt**: `~/.claude/prompts/obsidian-note.prompt.md`
 
 Use the Task tool to delegate to `general-purpose` subagent:
 
 ```
-Prompt: "You are delegated to act as the zettelkasten-integrator agent.
+Prompt: "You are delegated to act as the zettelkasten-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/zettelkasten-integrator.md
+Read the agent instructions at: ~/.claude/agents/zettelkasten-agent.md
 Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
 
 Then integrate this Notion-sourced Markdown into a Zettelkasten literature note:

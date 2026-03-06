@@ -25,17 +25,17 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 2. **[Conditional] Extract video transcript** (only if VIDEO_URL detected)
    - Subject: "Extract video transcript"
-   - Description: "Use video-transcript-extractor agent to fetch transcript from video URL"
+   - Description: "Use video-agent agent to fetch transcript from video URL"
    - ActiveForm: "Extracting video transcript"
 
 3. **Generate structured Markdown**
    - Subject: "Generate structured Markdown"
-   - Description: "Use markdown-file-generator agent to convert source to clean Markdown"
+   - Description: "Use markdown-file-agent agent to convert source to clean Markdown"
    - ActiveForm: "Generating structured Markdown"
 
 4. **Integrate into Zettelkasten**
    - Subject: "Integrate into Zettelkasten"
-   - Description: "Use zettelkasten-integrator agent to create literature note with frontmatter, links, and MOC updates"
+   - Description: "Use zettelkasten-agent agent to create literature note with frontmatter, links, and MOC updates"
    - ActiveForm: "Integrating into Zettelkasten"
 
 5. **Report completion**
@@ -72,14 +72,14 @@ Otherwise: Mark task #2 as `deleted` (not needed)
 
 **Update task**: Mark "Extract video transcript" as `in_progress`
 
-**Read agent**: `~/.claude/agents/video-transcript-extractor.md`
+**Read agent**: `~/.claude/agents/video-agent.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
 ```
-Prompt: "You are delegated to act as the video-transcript-extractor agent.
+Prompt: "You are delegated to act as the video-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/video-transcript-extractor.md
+Read the agent instructions at: ~/.claude/agents/video-agent.md
 
 Then extract the transcript from this video URL: <video_url>
 
@@ -99,15 +99,15 @@ Return the path to the created transcript file."
 
 **Update task**: Mark "Generate structured Markdown" as `in_progress`
 
-**Read agent**: `~/.claude/agents/markdown-file-generator.md`
+**Read agent**: `~/.claude/agents/markdown-file-agent.md`
 **Read prompt**: `~/.claude/prompts/crawler.prompt.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
 ```
-Prompt: "You are delegated to act as the markdown-file-generator agent.
+Prompt: "You are delegated to act as the markdown-file-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/markdown-file-generator.md
+Read the agent instructions at: ~/.claude/agents/markdown-file-agent.md
 Read the formatting rules at: ~/.claude/prompts/crawler.prompt.md
 
 Then convert this source to structured Markdown:
@@ -117,7 +117,7 @@ Requirements:
 - Zero data loss policy
 - Preserve tables/code/SVGs
 - Output to: zz.original-source/src-<title-kebab>.md
-- For complex diagrams, you may sub-delegate to ~/.claude/agents/diagram-generator.md
+- For complex diagrams, you may sub-delegate to ~/.claude/agents/diagram-agent.md
 
 Return the path to the created Markdown file."
 ```
@@ -129,39 +129,12 @@ Return the path to the created Markdown file."
 
 **Update task**: Mark "Integrate into Zettelkasten" as `in_progress`
 
-**Read agent**: `~/.claude/agents/zettelkasten-integrator.md`
-**Read prompt**: `~/.claude/prompts/obsidian-note.prompt.md`
-
-Use the Task tool to delegate to `general-purpose` subagent with:
-
-```
-Prompt: "You are delegated to act as the zettelkasten-integrator agent.
-
-Read the agent instructions at: ~/.claude/agents/zettelkasten-integrator.md
-Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
-
-Then integrate this source Markdown into a Zettelkasten literature note:
-Source file: <path from Phase 1>
-
-Follow this procedure:
-1. Analyze content → determine domain folder (cs/web/ai/principle/devops/math)
-2. Create filename: Domain-Concept-Name-In-Train-Case.md
-3. Apply literature note frontmatter (Date, Type, Categories, Before/Next, Link, Src)
-4. Structure: Abstract → Content sub-sections → Links
-5. Add code examples with Bad vs Good pattern (TypeScript preferred)
-6. For visual aids: you may sub-delegate to ~/.claude/agents/diagram-generator.md
-7. Scan vault for related notes → add backlinks
-8. Update MOCs in 000.Index/
-9. Delete source file from zz.original-source/
-10. Report final location + MOC updates
-
-Return:
-- Note path
-- Domain
-- Backlinks added
-- MOC updates
-- Source file deletion status"
-```
+Use the `zk-note` skill to orchestrate the integration:
+- Pass the source file path from Phase 1
+- The skill handles the two-agent pipeline internally:
+  1. `zettelkasten-agent` — analyzes content (concept, domain, insights, relationships)
+  2. `obsidian-formatter-agent` — formats, writes, and integrates the note into the vault
+  3. Cleanup — deletes source file
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry

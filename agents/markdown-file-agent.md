@@ -7,7 +7,7 @@ capabilities:
   - Convert HTML to Markdown (headings, code blocks, tables, images, links)
   - Preserve SVG as fenced code blocks
   - Verify output quality (zero data loss policy)
-  - Delegate diagram conversion to diagram-generator agent
+  - Delegate diagram conversion to diagram-agent agent
 tools:
   - Read
   - Write
@@ -121,7 +121,7 @@ Apply these conversions:
 - **SVG**: Wrap in fenced `svg` code block
 - **Images**: `![alt](url)` format, keep original URLs
 - **Links**: Inline format `[text](url)`
-- **Diagrams**: Delegate to `~/.claude/agents/diagram-generator.md`
+- **Diagrams**: Delegate to `~/.claude/agents/diagram-agent.md`
 
 ```bash
 echo -e "${GREEN}  ✓${RESET} 8 headings preserved"

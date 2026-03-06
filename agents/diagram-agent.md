@@ -84,7 +84,7 @@ graph TD
 ## When to Use ASCII Instead
 
 For plain-text contexts (terminal, code comments, `txt` files, or when Mermaid rendering
-is unavailable), delegate to `~/.claude/agents/ascii-diagram-generator.md` instead.
+is unavailable), delegate to `~/.claude/agents/ascii-diagram-agent.md` instead.
 
 **Use Mermaid** (this agent): Obsidian notes, GitHub Markdown, rendered docs.
 **Use ASCII**: Terminal output, code comments, plain text files, maximum portability.
@@ -177,4 +177,4 @@ echo -e "${DIM}  Type: flowchart | Nodes: 5 | Connections: 7${RESET}"
 | SVG too complex | Preserve as fenced SVG block instead of converting | `echo -e "${YELLOW}⚠${RESET} SVG too complex for Mermaid conversion\n${CYAN}→${RESET} Preserving as fenced SVG block"` |
 | Unsupported Mermaid feature | Fall back to simpler syntax or note the limitation | `echo -e "${YELLOW}⚠${RESET} Feature not supported in Obsidian Mermaid\n${CYAN}→${RESET} Using compatible alternative..."` |
 | Invalid input | Abort with clear error | `echo -e "${RED}✗ Error:${RESET} Cannot parse input\n${DIM}  Expected: text description, SVG, or Mermaid syntax${RESET}"` |
-| Plain-text context | Delegate to ASCII diagram agent | `echo -e "${YELLOW}⚠${RESET} Plain-text context detected\n${CYAN}→${RESET} Delegating to ascii-diagram-generator agent"` |
+| Plain-text context | Delegate to ASCII diagram agent | `echo -e "${YELLOW}⚠${RESET} Plain-text context detected\n${CYAN}→${RESET} Delegating to ascii-diagram-agent agent"` |

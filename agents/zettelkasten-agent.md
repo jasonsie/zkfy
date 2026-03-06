@@ -1,6 +1,6 @@
 ---
 description: "Analyze source content through Zettelkasten principles: atomicity, concept extraction, semantic relationships, and Feynman-style synthesis"
-whenToUse: "Use when source content needs to be analyzed for its core concept, domain classification, key insights, and relationships to existing knowledge"
+whenToUse: "Use when source content needs to be analyzed for its core concept, domain classification, key insights, and relationships to existing knowledge. Trigger keywords: 'take note'"
 capabilities:
   - Identify the single atomic concept from source material
   - Classify content into knowledge domains

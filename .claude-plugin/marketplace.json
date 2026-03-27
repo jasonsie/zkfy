@@ -17,19 +17,6 @@
       },
       "source": "./",
       "category": "productivity"
-    },
-    {
-      "name": "everything-claude-code",
-      "description": "Complete collection of battle-tested Claude Code configs from an Anthropic hackathon winner - agents, skills, hooks, and rules evolved over 10+ months of intensive daily use",
-      "version": "1.9.0",
-      "author": {
-        "name": "Affaan Mustafa",
-        "url": "https://x.com/affaanmustafa"
-      },
-      "repository": "https://github.com/affaan-m/everything-claude-code",
-      "license": "MIT",
-      "source": "/Users/jason/.claude/plugins/cache/everything-claude-code/everything-claude-code/1.9.0/",
-      "category": "workflow"
     }
   ]
 }

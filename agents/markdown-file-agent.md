@@ -3,7 +3,8 @@ description: "Extract content from URLs, text, or transcripts and produce struct
 whenToUse: "Use when raw content (URL, text, file, video transcript) needs to be converted into a clean, structured Markdown file"
 capabilities:
   - Detect source type (URL, file path, video transcript, raw text)
-  - Fetch and extract web page content
+  - Scrape web pages via Firecrawl CLI (clean markdown, JS-rendered pages)
+  - Fetch web pages via WebFetch (fallback when Firecrawl unavailable)
   - Convert HTML to Markdown (headings, code blocks, tables, images, links)
   - Preserve SVG as fenced code blocks
   - Verify output quality (zero data loss policy)
@@ -12,6 +13,8 @@ tools:
   - Read
   - Write
   - Bash
+  - Bash(firecrawl *)
+  - Bash(npx firecrawl *)
   - WebFetch
 model: sonnet
 color: green
@@ -96,12 +99,22 @@ echo -e "${MAGENTA}🔍${RESET} Detected: ${BOLD}Web URL${RESET}"
 echo -e "${BLUE}${BOLD}[3/6] Extracting content...${RESET}"
 ```
 
-**Web URL**: Fetch page → extract main content area → skip nav/footer/ads → preserve heading structure.
+**Web URL**: Use `firecrawl scrape` (preferred) for clean, JS-rendered extraction. Fall back to `WebFetch` only if Firecrawl is unavailable.
 
 ```bash
-echo -e "${GREEN}  ✓${RESET} Page fetched ${DIM}(3.2s)${RESET}"
-echo -e "${GREEN}  ✓${RESET} Main content extracted ${DIM}(12,543 chars)${RESET}"
+# Preferred — Firecrawl CLI (see firecrawl-scrape skill for full options)
+firecrawl scrape "<url>" --only-main-content -o "<output_dir>/src-<title-kebab>.md"
+
+# Fallback — WebFetch (when firecrawl CLI not installed)
+# Fetch page → extract main content area → skip nav/footer/ads
 ```
+
+```bash
+echo -e "${GREEN}  ✓${RESET} Page scraped via Firecrawl ${DIM}(main content only)${RESET}"
+echo -e "${DIM}  Size: 52 KB | Words: ~8,000${RESET}"
+```
+
+> If Firecrawl outputs the file directly, skip Steps 4–5 and proceed to Step 6 (verify the file was written).
 
 **File / Video transcript**: Read content → extract title from `# Heading` or filename.
 
@@ -182,6 +195,7 @@ If content can't be cleanly converted to Markdown, preserve as raw HTML block.
 |-------|--------|-----------------|
 | Prompt not found | Warn and proceed with default formatting | `echo -e "${YELLOW}⚠${RESET} crawler.prompt.md not found\n${DIM}  Using default formatting rules${RESET}"` |
 | Unrecognized source type | Abort — cannot determine extraction method | `echo -e "${RED}✗ ABORT:${RESET} Cannot determine source type\n${DIM}  Provide a URL, file path, or raw text${RESET}"` |
+| Firecrawl not installed | Fall back to WebFetch, warn user | `echo -e "${YELLOW}⚠${RESET} firecrawl not found\n${DIM}  Falling back to WebFetch${RESET}"` |
 | HTTP error (URL source) | Abort with status code | `echo -e "${RED}✗ ABORT:${RESET} HTTP <status> fetching URL\n${DIM}  <url>${RESET}"` |
 | Empty content after extraction | Abort — nothing to convert | `echo -e "${RED}✗ ABORT:${RESET} No content extracted\n${DIM}  Source returned empty response${RESET}"` |
 | Malformed HTML | Preserve as raw HTML block, warn | `echo -e "${YELLOW}⚠${RESET} Malformed HTML detected\n${DIM}  Preserving as raw HTML block${RESET}"` |

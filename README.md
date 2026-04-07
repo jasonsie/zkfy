@@ -26,10 +26,11 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ZETTELKASTEN INTEGRA
 
 ### Specialized Agents
 
-- **video-agent**: Fetches video transcripts
-- **markdown-file-agent**: Extracts and converts content
+- **video-agent**: Fetches video transcripts (YouTube, Vimeo)
+- **markdown-file-agent**: Extracts and converts content to Markdown via Firecrawl CLI or WebFetch
 - **diagram-agent**: Creates Mermaid diagrams for complex concepts
-- **zettelkasten-agent**: Handles vault integration, frontmatter, and linking
+- **zettelkasten-agent** (Opus): Deep content analysis — atomic concept, domain, Feynman explanations, relationships
+- **obsidian-formatter-agent** (Sonnet): Vault integration — filename, frontmatter, navigation, MOC updates, file writing
 
 ### Smart Features
 
@@ -82,23 +83,27 @@ touch ~/.claude/prompts/obsidian-note.prompt.md
 
 Create these prompt files with your formatting rules:
 
-**`~/.claude/prompts/crawler.prompt.md`** - Markdown formatting rules for content extraction
+**`~/.claude/prompts/crawler.prompt.md`** — Markdown formatting rules for content extraction
 
-**`~/.claude/prompts/obsidian-note.prompt.md`** - Zettelkasten literature note structure rules
+**`~/.claude/prompts/obsidian-note.prompt.md`** — Zettelkasten literature note structure rules
+
+**`~/.claude/prompts/notion-crawler.prompt.toml`** _(optional)_ — Custom rules for Notion content extraction
 
 ## Usage
 
-### Basic Command
+### Commands
+
+#### `/source-to-zk` — Web, Video, or Text to Zettelkasten
 
 ```bash
 # Navigate to your Obsidian vault
 cd /path/to/your/vault
 
-# Run zkfy with a source
+# Run with any source type
 /source-to-zk <url-or-text-or-file>
 ```
 
-### Examples
+Examples:
 
 ```bash
 # From a YouTube video
@@ -112,6 +117,28 @@ cd /path/to/your/vault
 
 # From a file
 /source-to-zk /path/to/source.txt
+```
+
+#### `/notion-to-zk` — Notion Page to Zettelkasten
+
+Import any Notion page directly into your vault via MCP integration.
+
+```bash
+/notion-to-zk https://www.notion.so/workspace/Page-Title-abc123
+```
+
+Requires Notion MCP server configured in `.claude/settings.local.json` and a `NOTION_API_KEY`.
+
+#### `/firecrawl` — Web Scraping Utility
+
+Run Firecrawl CLI commands directly from Claude Code.
+
+```bash
+/firecrawl scrape https://example.com
+/firecrawl crawl https://example.com --wait --limit 50
+/firecrawl map https://example.com
+/firecrawl search "your query"
+/firecrawl agent "Extract pricing info" --urls https://example.com/pricing
 ```
 
 ### Output
@@ -180,29 +207,39 @@ Examples:
 
 ```
 zkfy/
-├── plugin.json              # Plugin manifest
+├── .claude-plugin/
+│   ├── plugin.json              # Plugin manifest
+│   └── marketplace.json         # Marketplace listing
 ├── commands/
-│   └── source-to-zk.md     # Main orchestration command
+│   ├── source-to-zk.md          # Main pipeline: web/video/text → vault
+│   ├── notion-to-zk.md          # Notion page → vault (via MCP)
+│   └── firecrawl.md             # Firecrawl CLI wrapper
 ├── agents/
-│   ├── video-agent.md
-│   ├── markdown-file-agent.md
-│   ├── diagram-agent.md
-│   ├── ascii-diagram-agent.md
-│   └── zettelkasten-agent.md
+│   ├── video-agent.md            # Video transcript extraction
+│   ├── markdown-file-agent.md    # Content extraction + Markdown conversion
+│   ├── diagram-agent.md          # Mermaid diagram generation
+│   ├── ascii-diagram-agent.md    # ASCII diagram generation
+│   ├── zettelkasten-agent.md     # Content analysis (Opus)
+│   └── obsidian-formatter-agent.md # Vault integration (Sonnet)
 ├── skills/
-│   └── terminal-colors/    # Reusable output formatting
+│   ├── zk-note/                 # Two-agent integration pipeline skill
+│   ├── firecrawl-cli/           # Firecrawl CLI reference
+│   └── terminal-colors/         # Standardized output formatting
 └── hooks/
-    ├── hooks.json          # Event-based automation
-    └── validate-zk-structure.sh
+    ├── hooks.json               # Event-based automation
+    └── validate-zk-structure.sh # Hook validation script
 ```
 
 ### Agent Delegation
 
-Agents are specialized workers that can delegate to other agents:
+The pipeline uses a two-stage integration design:
 
-- `markdown-file-agent` may delegate to `diagram-agent` for visualizations
-- `zettelkasten-agent` may delegate to `diagram-agent` for abstract visuals
-- Each agent has a single, clear purpose and standardized output formatting
+1. `markdown-file-agent` uses Firecrawl CLI (preferred) or WebFetch to scrape content; may delegate to `diagram-agent` for complex visuals
+2. `zk-note` skill orchestrates the vault integration pipeline:
+   - `zettelkasten-agent` (Opus) — analyzes content, extracts atomic concept, writes Feynman explanations
+   - `obsidian-formatter-agent` (Sonnet) — generates filename, frontmatter, navigation links, writes to vault, updates MOCs
+
+Each agent has a single, clear purpose and standardized terminal output formatting.
 
 ### Error Handling
 
@@ -250,6 +287,8 @@ When modifying agents:
 - **Claude Code**: Latest version
 - **Obsidian**: With proper vault structure
 - **External prompts**: `crawler.prompt.md` and `obsidian-note.prompt.md`
+- **Firecrawl CLI** _(optional, recommended)_: `npm install -g firecrawl` + `FIRECRAWL_API_KEY` for better web scraping
+- **Notion MCP** _(optional)_: Required for `/notion-to-zk` command
 
 ## License
 

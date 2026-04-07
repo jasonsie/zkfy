@@ -142,11 +142,21 @@ notion_properties:
 
 #### Save Staging File
 
-Assemble:
-1. Frontmatter (YAML)
-2. Page title as H1: `# [Title]`
-3. All converted blocks in order
-4. Clean excessive whitespace (max 2 consecutive newlines)
+Assemble in this order — matching the standard source file format that `zk-note` expects:
+
+```markdown
+# Source: <page title>
+
+**URL**: <notion page URL>
+**Source**: <database name> (Notion)   ← or "Notion" if no database
+**Date**: <last_edited date YYYY-MM-DD>
+
+---
+
+<all converted blocks in order>
+```
+
+Clean excessive whitespace (max 2 consecutive newlines).
 
 **Save to**: `zz.original-source/src-notion-<title-kebab-case>.md`
 
@@ -166,51 +176,15 @@ Assemble:
 
 **Update task**: Mark "Integrate into Zettelkasten" as `in_progress`
 
-**Read agent**: `~/.claude/agents/zettelkasten-agent.md`
-**Read prompt**: `~/.claude/prompts/obsidian-note.prompt.md`
-
-Use the Task tool to delegate to `general-purpose` subagent:
-
-```
-Prompt: "You are delegated to act as the zettelkasten-agent agent.
-
-Read the agent instructions at: ~/.claude/agents/zettelkasten-agent.md
-Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
-
-Then integrate this Notion-sourced Markdown into a Zettelkasten literature note:
-Source file: <staging file path from Phase 0>
-
-Special handling for Notion sources:
-1. Extract domain from notion_properties.tags and content analysis
-2. Use keyword matching: cs → 111.cs/, web → 222.web/, ai → 333.ai/
-3. Weight: Notion tags × 3, headings × 2, body × 1
-4. Fallback to 111.cs/ if uncertain
-
-Follow standard integration procedure:
-1. Auto-detect domain folder → determine subfolder (up to 3 layers)
-2. Create filename: Domain-Concept-Name-In-Train-Case.md
-3. Transform frontmatter:
-   - Remove notion_* fields
-   - Add Zettelkasten fields (Date, Type, Categories, Before/Next)
-   - Set Link to notion_source
-   - Set Src to '<database name> (Notion)' or 'Notion' if database is "None"
-4. Structure: Abstract (list/diagram/text) → Content sections → Links
-5. Add code examples (Bad vs Good, TypeScript preferred)
-6. Scan vault → add ≥2 backlinks with rationales
-7. Update MOCs in 000.Index/
-8. Delete staging file
-9. Report: note path, domain detection results, backlinks, MOC updates
-
-Return:
-- Note path
-- Domain (with detection justification)
-- Backlinks added
-- MOC updates
-- Staging file deletion status"
-```
+Use the `zk-note` skill to orchestrate the integration:
+- Pass the staging file path from Phase 0
+- The skill handles the full two-agent pipeline internally:
+  1. `zettelkasten-agent` — analyzes content, detects domain, extracts concept, discovers related notes
+  2. `obsidian-formatter-agent` — generates filename, builds frontmatter (using the URL from `**URL**` field as `Link`, database from `**Source**` as `Src`), writes note, updates neighbors and MOCs
+  3. Cleanup — deletes staging file
 
 **On success**: Update task to `completed`, store results
-**On failure (domain unclear)**: Ask user to specify, then retry
+**On failure (domain unclear)**: Ask user to specify domain, then retry
 
 ### Step 3: Report
 

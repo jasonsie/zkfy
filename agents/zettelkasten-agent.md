@@ -64,6 +64,10 @@ A structured analysis containing:
 - `abstract`: Formatted abstract section (list format preferred, or Feynman summary)
 - `content_sections`: Fully written sub-sections with Feynman explanations and code examples
 - `related_notes`: List of existing vault notes with relationship rationale
+- `categories`: Primary + secondary categories from controlled vocabulary
+- `sub_categories`: Topic-level classification (lowercase-kebab)
+- `aliases`: 3-5 search terms (common name, abbreviation, CJK translation, synonyms)
+- `tags`: Cross-cutting concerns from controlled tag vocabulary
 
 ---
 
@@ -72,7 +76,7 @@ A structured analysis containing:
 ### 1. Read & Understand Source
 
 ```bash
-echo -e "${BLUE}${BOLD}[1/4] Reading source...${RESET}"
+echo -e "${BLUE}${BOLD}[1/5] Reading source...${RESET}"
 ```
 
 Read the source file completely. Understand the material deeply enough to teach it.
@@ -80,7 +84,7 @@ Read the source file completely. Understand the material deeply enough to teach 
 ### 2. Identify Atomic Concept
 
 ```bash
-echo -e "${BLUE}${BOLD}[2/4] Identifying atomic concept...${RESET}"
+echo -e "${BLUE}${BOLD}[2/5] Identifying atomic concept...${RESET}"
 ```
 
 Apply the Zettelkasten atomicity principle:
@@ -102,10 +106,45 @@ echo -e "${MAGENTA}📁${RESET} Domain: ${BOLD}web/${RESET}"
 echo -e "${CYAN}  Concept:${RESET} ${DIM}React Server Components${RESET}"
 ```
 
+### 2.5. Classify Metadata
+
+```bash
+echo -e "${BLUE}${BOLD}[2.5/5] Classifying metadata...${RESET}"
+```
+
+Determine the note's discoverability metadata:
+
+**Categories** (from controlled vocabulary):
+- Primary (required, 1): CS, Web, AI, Principles, Tools, Study Plan, Interview
+- Secondary (optional, 0-2): Programming, Database, Algorithm, Data Structure, Networking, Security, System Design, Performance, TypeScript, JavaScript, Python, React, Agent Systems
+
+**Sub-Categories**: 1-4 lowercase-kebab topic keywords specific to this note's content.
+
+**Aliases** (3-5 required):
+- The concept's common English name
+- Abbreviation or acronym if one exists
+- Traditional Chinese translation (繁體中文)
+- Alternative phrasings someone might search for
+
+**Tags** (from controlled vocabulary, 0-3):
+- Meta: interview-prep, career, learning-strategy
+- Quality: performance, security, testing, debugging
+- Structural: design-pattern, architecture, api-design
+- Technical: concurrency, state-management, type-system
+- Content-type: beginner, advanced, reference, cheatsheet
+
+Rule: only use tags that cross domain boundaries. Domain-specific keywords belong in Sub-Categories instead.
+
+```bash
+echo -e "${GREEN}  ✓${RESET} Categories: ${CYAN}<primary> + <secondary>${RESET}"
+echo -e "${GREEN}  ✓${RESET} Aliases: ${DIM}<count> terms${RESET}"
+echo -e "${GREEN}  ✓${RESET} Tags: ${DIM}<tags>${RESET}"
+```
+
 ### 3. Synthesize Content
 
 ```bash
-echo -e "${BLUE}${BOLD}[3/4] Synthesizing content...${RESET}"
+echo -e "${BLUE}${BOLD}[3/5] Synthesizing content...${RESET}"
 ```
 
 **Abstract** — choose format by priority:
@@ -131,7 +170,7 @@ echo -e "${GREEN}  ✓${RESET} Comparisons: ${DIM}2 bad/good patterns${RESET}"
 ### 4. Discover Relationships
 
 ```bash
-echo -e "${BLUE}${BOLD}[4/4] Discovering relationships...${RESET}"
+echo -e "${BLUE}${BOLD}[4/5] Discovering relationships...${RESET}"
 ```
 
 Scan the vault for semantically related notes:

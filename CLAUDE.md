@@ -34,6 +34,7 @@ Agents are specialized, single-purpose workers that can delegate to other agents
 - **ascii-diagram-agent**: Creates ASCII diagrams for plain-text contexts
 - **zettelkasten-agent**: Deep content analysis through Zettelkasten principles
   - Identifies atomic concept, domain classification, key insights
+  - Classifies metadata: Categories, Sub-Categories, Aliases, and tags (Step 2.5)
   - Writes Feynman-style explanations and code examples
   - Discovers semantic relationships with existing vault notes
 - **obsidian-formatter-agent**: Vault formatting and integration
@@ -52,6 +53,7 @@ agents/
   *.md                    # Specialized worker agents with YAML frontmatter
 skills/
   */SKILL.md              # Reusable skill modules
+  vault-search/           # Vault metadata search (query → ranked notes)
 hooks/
   hooks.json              # Event-based automation templates
 reference/
@@ -98,12 +100,19 @@ Type: literature
 Categories: []
 Sub-Categories: []
 Aliases: []
+tags: []
 Before: '[[Previous-Note]]'
 Next: '[[Next-Note]]'
 Link: '<source-url>'
 Src: '[[zz.original-source/src-file]]'
 ---
 ```
+
+The `tags` field enables cross-domain discovery using a controlled vocabulary:
+`interview-prep`, `career`, `learning-strategy`, `performance`, `security`,
+`testing`, `debugging`, `design-pattern`, `architecture`, `api-design`,
+`concurrency`, `state-management`, `type-system`, `beginner`, `advanced`,
+`reference`, `cheatsheet`, `stub`
 
 The `Before`/`Next` fields create bidirectional navigation by:
 1. Listing all notes in the domain folder

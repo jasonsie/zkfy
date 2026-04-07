@@ -29,7 +29,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ZETTELKASTEN INTEGRA
 - **video-agent**: Fetches video transcripts (YouTube, Vimeo)
 - **markdown-file-agent**: Extracts and converts content to Markdown via Firecrawl CLI or WebFetch
 - **diagram-agent**: Creates Mermaid diagrams for complex concepts
-- **zettelkasten-agent** (Opus): Deep content analysis — atomic concept, domain, Feynman explanations, relationships
+- **zettelkasten-agent** (Opus): Deep content analysis — atomic concept, domain, metadata classification (Categories/Sub-Categories/Aliases/tags), Feynman explanations, relationships
 - **obsidian-formatter-agent** (Sonnet): Vault integration — filename, frontmatter, navigation, MOC updates, file writing
 
 ### Smart Features
@@ -161,6 +161,7 @@ Type: literature
 Categories: [Web, React]
 Sub-Categories: [Hooks, State Management]
 Aliases: [React Hooks, useState]
+tags: [design-pattern, advanced]
 Before: '[[Web-Previous-Note]]'
 Next: '[[Web-Next-Note]]'
 Link: 'https://source-url.com'

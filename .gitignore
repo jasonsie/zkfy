@@ -28,6 +28,9 @@ $RECYCLE.BIN/
 # Claude Code local files
 .claude/*
 
+# Serena MCP local files
+.serena/
+
 # Temporary files
 *.tmp
 *.temp

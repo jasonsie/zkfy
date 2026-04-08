@@ -57,7 +57,7 @@ RESET='\033[0m'
 ## Input
 
 - `source`: Web URL, raw text, file path, or video transcript from Phase 0
-- `output_dir`: Default `zz.original-source/`
+- `output_dir`: Default `row/`
 - `crawler_prompt`: Read `~/.claude/prompts/crawler.prompt.md` before starting
 
 ## Output
@@ -90,7 +90,7 @@ echo -e "${MAGENTA}🔍${RESET} Detected: ${BOLD}Web URL${RESET}"
 |------|-----------|------------|--------|
 | Web URL | `http://` or `https://` | Fetch, check HTTP 200 | `echo -e "${GREEN}✓${RESET} Web URL ${DIM}(HTTP 200)${RESET}"` |
 | File path | `/`, `./`, `~` prefix | File exists | `echo -e "${GREEN}✓${RESET} File path ${DIM}(exists)${RESET}"` |
-| Video transcript | `.md` in `zz.original-source/` | File exists | `echo -e "${GREEN}✓${RESET} Video transcript ${DIM}(found)${RESET}"` |
+| Video transcript | `.md` in `row/` | File exists | `echo -e "${GREEN}✓${RESET} Video transcript ${DIM}(found)${RESET}"` |
 | Raw text | None of above | Non-empty | `echo -e "${GREEN}✓${RESET} Raw text ${DIM}(${#text} chars)${RESET}"` |
 
 ### 3. Extract Content
@@ -176,7 +176,7 @@ Location: `<output_dir>/`
 
 ```bash
 echo -e "${GREEN}${BOLD}✓ File saved:${RESET}"
-echo -e "${CYAN}  → zz.original-source/src-complete-guide-to-react-hooks.md${RESET}"
+echo -e "${CYAN}  → row/src-complete-guide-to-react-hooks.md${RESET}"
 echo -e "${DIM}  Size: 45 KB | Lines: 892 | Words: 5,234${RESET}"
 ```
 

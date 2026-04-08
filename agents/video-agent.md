@@ -54,7 +54,7 @@ echo -e "${DIM}  Final: 1,234 words | 125 paragraphs${RESET}"
 # Success
 echo -e "${BLUE}${BOLD}[6/6] Saving...${RESET}"
 echo -e "${GREEN}${BOLD}✓ Transcript saved:${RESET}"
-echo -e "${CYAN}  → zz.original-source/understanding-react-hooks.md${RESET}"
+echo -e "${CYAN}  → row/understanding-react-hooks.md${RESET}"
 
 # ABORT example
 echo -e "${RED}${BOLD}✗ ABORT:${RESET} Cannot fetch transcript"
@@ -66,7 +66,7 @@ echo -e "${DIM}  No subtitle tracks available for this video${RESET}"
 ## Input
 
 - `video_url`: URL to a video (YouTube, Vimeo, or any yt-dlp-supported platform)
-- `output_dir`: Save location (default: `zz.original-source/`)
+- `output_dir`: Save location (default: `row/`)
 
 ## Output
 

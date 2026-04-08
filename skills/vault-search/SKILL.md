@@ -40,6 +40,20 @@ Produce a **deduplicated flat list** of all search terms. Track which terms come
 
 ---
 
+### Tier 0: Index Lookup (Fast Path)
+
+Before running grep-based tiers, check if `.claude/index.md` exists in the vault root. If it does:
+
+1. Read `.claude/index.md`
+2. Search entries for matches against primary keywords (case-insensitive substring match on note name, abstract excerpt, and sub-categories)
+3. Collect matched entries as Tier 0 results (score: 35 pts each)
+
+If Tier 0 yields ≥ limit results → skip to Step 4.
+If Tier 0 yields some results → proceed to Tier 1 but merge with Tier 0 results.
+If `.claude/index.md` doesn't exist → skip directly to Tier 1.
+
+---
+
 ### Tier 1: Alias + Filename Match (Highest Signal)
 
 These are the strongest matches — curated synonyms and note names.
@@ -61,7 +75,7 @@ Path: {vault_root}
 ```
 
 **Exclude from all searches:**
-`y.template/`, `zz.original-source/`, `z.attachments/`, `x.temp/`, `docs/`,
+`y.template/`, `row/`, `row/assets/`, `x.temp/`, `docs/`,
 `.obsidian/`, `.claude/`, `.agents/`, `.prompts/`, `.github/`, `.instructions/`
 
 **Merge** Tier 1 results. Record matched field as `Aliases` or `Filename` per note.
@@ -109,6 +123,7 @@ Add new matches with field = `Body`.
 
 1. **Deduplicate** — if a note appears in multiple tiers, keep the highest-tier entry
 2. **Score each note:**
+   - Tier 0 = 35 pts (index match)
    - Tier 1 = 30 pts
    - Tier 2 = 20 pts
    - Tier 3 = 10 pts

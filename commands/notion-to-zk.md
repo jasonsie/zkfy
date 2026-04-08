@@ -158,7 +158,7 @@ Assemble in this order — matching the standard source file format that `zk-not
 
 Clean excessive whitespace (max 2 consecutive newlines).
 
-**Save to**: `zz.original-source/src-notion-<title-kebab-case>.md`
+**Save to**: `row/src-notion-<title-kebab-case>.md`
 
 **Error Handling**:
 - **401 Unauthorized**: STOP. Verify token, restart Claude Code

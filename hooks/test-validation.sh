@@ -54,7 +54,7 @@ echo -e "${YELLOW}Test 2: Valid ZK Structure (Simulated)${RESET}"
 # Create temporary ZK structure
 temp_dir=$(mktemp -d)
 cd "$temp_dir"
-mkdir -p cs web ai principle devops math 000.Index zz.original-source
+mkdir -p cs web ai principle devops math 000.Index row
 
 echo -e "${CYAN}Test directory:${RESET} $temp_dir"
 echo -e "${CYAN}Folders present:${RESET}"

@@ -21,7 +21,7 @@ if [[ -z "$file_path" ]] || [[ ! "$file_path" =~ \.md$ ]]; then
 fi
 
 # Define required ZK folders
-required_folders=("cs" "web" "ai" "principle" "devops" "math" "000.Index" "zz.original-source")
+required_folders=("cs" "web" "ai" "principle" "devops" "math" "000.Index" "row")
 
 # Get current working directory
 cwd=$(pwd)

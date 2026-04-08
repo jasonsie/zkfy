@@ -13,7 +13,7 @@ This is **zkfy**, a Claude Code plugin that transforms unstructured content (URL
 The core workflow follows this execution model:
 
 ```
-INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → OUTPUT
+INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → CROSS-POLLINATION → INDEX + LOG → OUTPUT
 ```
 
 1. **Input Detection**: Classify source as VIDEO_URL, WEB_URL, or TEXT
@@ -22,6 +22,8 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 4. **Phase 2**: Integrate into vault using `zk-note` skill, which orchestrates:
    - `zettelkasten-agent` (Opus) — concept analysis, synthesis, relationship reasoning
    - `obsidian-formatter-agent` (Sonnet) — filename, frontmatter, navigation, MOCs, file writing
+5. **Phase 2.5**: Cross-pollinate using `cross-pollinator-agent` — update 5-10 existing related notes with backlinks
+6. **Phase 3**: Record the operation — append to `.claude/log.md` via `wiki-log` skill, update `.claude/index.md` via `vault-index` skill
 
 ### Agent Hierarchy
 
@@ -41,6 +43,10 @@ Agents are specialized, single-purpose workers that can delegate to other agents
   - Generates Train-Case filenames, frontmatter, note body structure
   - Discovers and updates Before/Next neighbors
   - Updates MOCs, writes the final note file
+- **cross-pollinator-agent**: Knowledge graph enrichment
+  - After a new note is created, propagates backlinks to existing related notes
+  - Detects contradictions and adds inline warnings
+  - Append-only — never rewrites existing content, max 10 notes per run
 
 ### Component Structure
 
@@ -48,12 +54,17 @@ Agents are specialized, single-purpose workers that can delegate to other agents
 .claude-plugin/
   plugin.json              # Plugin manifest
 commands/
-  source-to-zk.md         # Main orchestration command
+  source-to-zk.md         # Main orchestration command (ingest pipeline)
+  query-to-note.md        # Promote query answers into permanent ZK notes
+  vault-lint.md            # Semantic health checks (contradictions, orphans, gaps)
 agents/
   *.md                    # Specialized worker agents with YAML frontmatter
 skills/
   */SKILL.md              # Reusable skill modules
   vault-search/           # Vault metadata search (query → ranked notes)
+  wiki-log/               # Append-only operation log (.claude/log.md)
+  vault-index/            # Auto-maintained vault catalog (.claude/index.md)
+  vault-lint/             # 7 semantic health checks with auto-fix
 hooks/
   hooks.json              # Event-based automation templates
 reference/
@@ -75,7 +86,17 @@ The target Obsidian vault must have:
 
 - **Domain folders**: `cs/`, `web/`, `ai/`, `principle/`, `devops/`, `math/`
 - **Index folder**: `000.Index/` containing Maps of Content (MOCs)
-- **Source staging**: `zz.original-source/` for temporary files
+- **Source staging**: `row/` for temporary files
+- **`.claude/log.md`**: Operation log (auto-created by wiki-log skill)
+- **`.claude/index.md`**: Auto-maintained vault catalog (auto-created by vault-index skill)
+
+### LLM Wiki Pattern Operations
+
+The plugin implements the three core operations from the LLM Wiki Pattern:
+
+- **Ingest** (`/source-to-zk`): Process source → create note → cross-pollinate related notes → log + index
+- **Query** (`/query-to-note`): Search vault → synthesize answer → file as permanent note → cross-pollinate → log
+- **Lint** (`/vault-lint`): Scan for contradictions, stale content, orphans, missing pages, concept gaps → auto-fix option → log
 
 ## Key Conventions
 
@@ -104,7 +125,7 @@ tags: []
 Before: '[[Previous-Note]]'
 Next: '[[Next-Note]]'
 Link: '<source-url>'
-Src: '[[zz.original-source/src-file]]'
+Src: '[[row/src-file]]'
 ---
 ```
 
@@ -154,7 +175,18 @@ RESET='\033[0m'
 
 To test the full pipeline:
 ```bash
+# Ingest: source → ZK note → cross-pollinate → log + index
 /source-to-zk <url-or-text-or-file>
+
+# Query: search vault → synthesize → file as permanent note
+/query-to-note "How does X compare to Y?"
+
+# Lint: semantic health check
+/vault-lint 333.ai/
+/vault-lint . --fix           # auto-fix weak links, concept gaps, cross-ref gaps
+
+# Verify logging
+grep "^## \[" .claude/log.md | tail -5
 ```
 
 ### Modifying Agents

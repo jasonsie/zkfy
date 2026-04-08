@@ -61,7 +61,7 @@ RESET='\033[0m'
 - `content_sections`: Written sub-sections with explanations and code examples
 - `related_notes`: List of related notes with rationale (for Links section)
 - `source_url`: Original source URL (for frontmatter Link field)
-- `source_file`: Path to source file in `zz.original-source/` (for frontmatter Src field)
+- `source_file`: Path to source file in `row/` (for frontmatter Src field)
 - `categories`: Classified categories list from analysis (e.g., `[Web, JavaScript]`)
 - `sub_categories`: Topic keywords from analysis (e.g., `[closures, scope]`)
 - `aliases`: Search terms from analysis (e.g., `[Closure, 閉包, function scope]`)
@@ -129,7 +129,7 @@ tags: <tags from analysis>
 Before: '[[<prev-note-in-dir>]]'
 Next: '[[<next-note-in-dir>]]'
 Link: '<source_url>'
-Src: '[[zz.original-source/src-<title>]]'
+Src: '[[row/src-<title>]]'
 ---
 ```
 

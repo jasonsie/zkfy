@@ -105,9 +105,29 @@ Return:
 - MOCs updated"
 ```
 
+### Step 3.5: Cross-Pollinate (optional)
+
+If called from `/source-to-zk` or `/query-to-note`, delegate to `cross-pollinator-agent` to update existing related notes with backlinks to the new note:
+
+```
+Prompt: "You are delegated to act as the cross-pollinator-agent agent.
+
+Read the agent instructions at: ~/.claude/agents/cross-pollinator-agent.md
+
+Then cross-pollinate this newly created note:
+New note path: <note path from step 3>
+Vault root: <vault_root>
+Candidates: <related_notes from step 2>
+Dry run: false
+
+Return the list of files updated and changes made."
+```
+
+If cross-pollination fails, warn but do not abort — the note is already created.
+
 ### Step 4: Cleanup & Report
 
-Delete the source file from `zz.original-source/`.
+Delete the source file from `row/`.
 
 Report completion:
 ```
@@ -116,6 +136,7 @@ Report completion:
 🔗 Links: <backlinks added>
 📑 MOC updates: <MOCs modified>
 🔄 Navigation: Before→<note>→Next
+🔄 Cross-updates: <N> existing notes enriched (if cross-pollination ran)
 ```
 
 ## Output

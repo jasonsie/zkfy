@@ -12,6 +12,18 @@
         ],
         "description": "Validate ZK folder structure and redirect notes to /output if structure is invalid"
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "tool == \"Write\" && tool_input.file_path matches \"\\.md$\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/signal-index-update.sh"
+          }
+        ],
+        "description": "Signal index update reminder when a .md note is written to a zkfied vault (structure-based detection via .claude/ directory)"
+      }
     ]
   }
 }

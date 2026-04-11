@@ -54,6 +54,30 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 **Important**: Update each task's status (`in_progress` → `completed`) as you progress through the pipeline.
 
+### Step 0.5: Check for Existing Synthesis
+
+Before running the full pipeline, do a quick `vault-search` with `--limit 5` using the question as the query.
+
+Scan the results for any note flagged `[SYNTHESIS]` (i.e., `Type: permanent` in its frontmatter). If one is found and its abstract substantially covers the question:
+
+1. Read the synthesis note fully and display it to the user:
+   ```
+   📋 Found existing synthesis: [[<Note-Name>]]
+   Created: <Date from frontmatter>
+   Abstract: <abstract excerpt>
+
+   Options:
+   (a) Use this answer — display the note and stop
+   (b) Create a fresh synthesis — continue with Steps 1-6
+   (c) Update the existing note — proceed but write to the existing path
+   ```
+2. Wait for user choice before proceeding
+3. If (a): show the note content, mark all pipeline tasks `deleted`, report done
+4. If (b): proceed normally through Step 1
+5. If (c): proceed through Step 1, but in Step 3 write to the existing note path instead of creating new
+
+If no synthesis match found, proceed directly to Step 1 without prompting.
+
 ### Step 1: Vault Search
 
 **Update task**: Mark "Search vault for relevant notes" as `in_progress`

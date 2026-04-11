@@ -19,7 +19,7 @@ Detect contradictions, staleness, orphan pages, missing pages, weak links, conce
 - **path**: Directory to lint (e.g., `333.ai/`, `.` for entire vault)
 - **--fix**: Auto-remediate fixable issues (checks 5, 6, 7)
 - **--checks**: Comma-separated check numbers to run (default: all)
-- **--vault**: Vault root (default: `/Users/jason/Developer/obsidian/CS`)
+- **--vault**: Vault root (default: `.` — current working directory, i.e., run from inside your vault)
 
 ## The 7 Checks
 

@@ -61,12 +61,13 @@ agents/
   *.md                    # Specialized worker agents with YAML frontmatter
 skills/
   */SKILL.md              # Reusable skill modules
-  vault-search/           # Vault metadata search (query → ranked notes)
+  vault-search/           # Tiered retrieval: Keyword Index → enriched entry scan → grep fallback
   wiki-log/               # Append-only operation log (.claude/log.md)
-  vault-index/            # Auto-maintained vault catalog (.claude/index.md)
+  vault-index/            # Enriched vault catalog with Keyword Index (.claude/index.md)
   vault-lint/             # 7 semantic health checks with auto-fix
 hooks/
-  hooks.json              # Event-based automation templates
+  hooks.json              # PreToolUse (ZK validation) + PostToolUse (index update signal)
+  signal-index-update.sh  # Structure-based vault detection for auto-index hook
 reference/
   hookify/                # Reference implementation (not active)
 ```
@@ -84,18 +85,20 @@ The plugin depends on these external files in the user's environment:
 
 The target Obsidian vault must have:
 
-- **Domain folders**: `cs/`, `web/`, `ai/`, `principle/`, `devops/`, `math/`
-- **Index folder**: `000.Index/` containing Maps of Content (MOCs)
+- **Domain folders**: Any top-level directories (auto-discovered — no fixed naming required). Numeric prefixes are stripped (e.g., `111.cs/` → `cs` domain). Exclude list: `y.template/`, `row/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `000.Index/`.
+- **Index folder**: `000.Index/` containing Maps of Content (MOCs) — optional but recommended
 - **Source staging**: `row/` for temporary files
 - **`.claude/log.md`**: Operation log (auto-created by wiki-log skill)
-- **`.claude/index.md`**: Auto-maintained vault catalog (auto-created by vault-index skill)
+- **`.claude/index.md`**: Auto-maintained vault catalog with enriched metadata + Keyword Index (auto-created by vault-index skill)
+
+All skills default to `.` (current working directory) as vault root — run commands from inside your vault.
 
 ### LLM Wiki Pattern Operations
 
 The plugin implements the three core operations from the LLM Wiki Pattern:
 
 - **Ingest** (`/source-to-zk`): Process source → create note → cross-pollinate related notes → log + index
-- **Query** (`/query-to-note`): Search vault → synthesize answer → file as permanent note → cross-pollinate → log
+- **Query** (`/query-to-note`): Check for existing synthesis → search vault → synthesize answer → file as permanent note → cross-pollinate → log
 - **Lint** (`/vault-lint`): Scan for contradictions, stale content, orphans, missing pages, concept gaps → auto-fix option → log
 
 ## Key Conventions

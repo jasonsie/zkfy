@@ -13,7 +13,7 @@ Append structured log entries to `.claude/log.md` (relative to vault root) for i
 
 - **operation**: One of `ingest`, `query`, `lint` (unknown types logged with a warning)
 - **key=value pairs**: Metadata fields. Quote values containing spaces: `title="My Note Title"`
-- **--vault PATH**: Vault root (default: `/Users/jason/Developer/obsidian/CS`)
+- **--vault PATH**: Vault root (default: `.` — current working directory, i.e., run from inside your vault)
 
 ### Examples
 

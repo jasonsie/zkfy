@@ -91,15 +91,12 @@ Apply the Zettelkasten atomicity principle:
 - **One note = one concept**. If the source covers multiple concepts, identify the primary one.
 - Name the concept clearly and concisely.
 
-Determine domain:
-- `cs/` — computer science fundamentals, algorithms, data structures
-- `web/` — web development, frameworks, browser APIs
-- `ai/` — machine learning, LLMs, neural networks
-- `principle/` — design principles, patterns, methodologies
-- `devops/` — infrastructure, CI/CD, deployment
-- `math/` — mathematics, statistics, formal methods
+Determine domain by scanning the vault root for top-level folders:
 
-If the domain is ambiguous, ask the user to choose.
+1. Use Glob `*/` on `vault_root` to list top-level directories
+2. Exclude: `y.template/`, `row/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `.agents/`, `.prompts/`, `.github/`, `.instructions/`, `000.Index/`
+3. Strip numeric prefix from remaining dirs (e.g., `111.cs/` → `cs`, `333.ai/` → `ai`, `notes/` → `notes`)
+4. Pick the best-fit domain based on the concept. If ambiguous, present the available domains and ask the user to choose.
 
 ```bash
 echo -e "${MAGENTA}📁${RESET} Domain: ${BOLD}web/${RESET}"

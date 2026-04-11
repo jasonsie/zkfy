@@ -175,20 +175,22 @@ Return the list of files updated and changes made."
 **On success**: Update task to `completed`, store cross-update results
 **On failure**: Warn user, continue to Phase 3 — the note is still created
 
-### Phase 3: Index and Log
+### Phase 3: Index and Log (Mandatory)
 
 **Update task**: Mark "Update index and log" as `in_progress`
 
-Record the ingest operation and update the vault index:
+Phase 3 is **mandatory** — do not skip even if earlier phases had warnings.
 
 1. Use `wiki-log` skill:
    `ingest title="<note-concept>" source="<original-source-url>" output="<note-path>" mocs="<MOCs-updated>" links="<backlinks-created>" cross-updates="<files-updated-in-phase-2.5>"`
 
 2. Use `vault-index` skill:
    `--append <note-path>`
+   - If vault-index fails, **retry once** before reporting failure
+   - After success, verify the note appears in the last 20 lines of `.claude/index.md`
 
 **On success**: Update task to `completed`
-**On failure**: Warn user — the note and cross-pollination are still done
+**On failure after retry**: Report to user that the index is stale and they should run `/vault-index --full` to resync. Do NOT mark the pipeline as fully successful.
 
 ### Step 3: Report
 

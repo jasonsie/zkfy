@@ -1,6 +1,6 @@
 ---
 name: zk-note
-description: Transform markdown files into fully integrated Zettelkasten literature notes with frontmatter, backlinks, and MOC updates. Use when you need to (1) Create atomic notes from existing markdown, (2) Add proper navigation and categorization, (3) Link notes into your knowledge graph, (4) Apply Feynman-style explanations with code examples.
+description: Transform markdown files into fully integrated Zettelkasten literature notes with frontmatter, backlinks, and MOC updates. Use when you need to (1) Create atomic notes from existing markdown, (2) Add proper navigation and categorization, (3) Link notes into your knowledge graph, (4) Apply Feynman-style synthesis (digest mode) or preserve original content verbatim (preserve mode).
 ---
 
 # ZK-Note
@@ -9,9 +9,14 @@ Transform markdown into a fully integrated Zettelkasten literature note.
 
 ## Input
 
-$ARGUMENTS — <path-to-markdown-file> [domain]
+$ARGUMENTS — <path-to-markdown-file> [domain] [--format <mode>]
 
 Optional domain: cs/web/ai/principle/devops/math
+
+Optional flags:
+- **--format** `<mode>` — Controls content transformation depth:
+  - `digest` (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
+  - `preserve`: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
 
 ## Execution Order
 
@@ -27,7 +32,8 @@ Source File
 │                          │
 │  → atomic concept        │
 │  → domain classification │
-│  → Feynman explanations  │
+│  → Feynman explanations  │  (digest mode)
+│  → verbatim pass-through │  (preserve mode)
 │  → relationship rationale│
 └──────────┬──────────────┘
            │ analysis results
@@ -47,9 +53,14 @@ Source File
       Cleanup & Report
 ```
 
-### Step 1: Read Source
+### Step 1: Read Source and Parse Flags
 
 Read the markdown file from the provided path. Extract the source URL if present in the file.
+
+Parse `--format` from `$ARGUMENTS`:
+- If `--format preserve` is present → `format_mode = preserve`
+- If `--format digest` is present → `format_mode = digest`
+- If `--format` is absent → `format_mode = digest` (default)
 
 ### Step 2: Delegate to zettelkasten-agent (Analysis)
 
@@ -63,6 +74,7 @@ Read the agent instructions at: ~/.claude/agents/zettelkasten-agent.md
 Then analyze this source content for Zettelkasten integration:
 Source file: <path>
 Vault root: <vault_root>
+Format mode: <digest|preserve>
 [Domain: <domain> — if provided by user]
 
 Return a structured analysis:
@@ -71,7 +83,7 @@ Return a structured analysis:
 - key_insights (bullet points)
 - source_url
 - abstract (formatted abstract section)
-- content_sections (fully written sub-sections with Feynman explanations and code examples)
+- content_sections (digest: fully written sub-sections with Feynman explanations and code examples; preserve: original content sections verbatim with ### headings applied)
 - related_notes (list of [[Note]] — rationale pairs)"
 ```
 
@@ -98,6 +110,7 @@ Source URL: <source_url from step 2>
 Source file: <source_file>
 Today's date: <today's date>
 Vault root: <vault_root>
+Format mode: <digest|preserve>
 
 Return:
 - Note path and filename

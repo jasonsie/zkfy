@@ -53,6 +53,7 @@ RESET='\033[0m'
 
 - `source_file`: Path to source Markdown file
 - `vault_root`: Root directory of the Obsidian vault
+- `format_mode`: `digest` (default) or `preserve` — controls content transformation depth
 
 ## Output
 
@@ -61,8 +62,10 @@ A structured analysis containing:
 - `concept`: The single atomic concept name
 - `key_insights`: Main takeaways as bullet points
 - `source_url`: Extracted from source file if present
-- `abstract`: Formatted abstract section (list format preferred, or Feynman summary)
-- `content_sections`: Fully written sub-sections with Feynman explanations and code examples
+- `abstract`: Formatted abstract section (list format preferred, or brief summary)
+- `content_sections`:
+  - `digest` mode: Fully written sub-sections with Feynman explanations and code examples
+  - `preserve` mode: Original source sections extracted verbatim, with `###` headings applied if missing
 - `related_notes`: List of existing vault notes with relationship rationale
 - `categories`: Primary + secondary categories from controlled vocabulary
 - `sub_categories`: Topic-level classification (lowercase-kebab)
@@ -144,11 +147,15 @@ echo -e "${GREEN}  ✓${RESET} Tags: ${DIM}<tags>${RESET}"
 echo -e "${BLUE}${BOLD}[3/5] Synthesizing content...${RESET}"
 ```
 
-**Abstract** — choose format by priority:
+**Abstract** — choose format by priority (applies in BOTH modes):
 1. **List format** (preferred): Key points as bullets
-2. **Brief text**: 2-3 sentence Feynman-style summary
+2. **Brief text**: 2-3 sentence summary
 
-**Content sub-sections** (`###` level):
+Note: In `preserve` mode, the abstract summarizes the original faithfully — no Feynman reframing.
+
+**Content sub-sections** (`###` level) — behavior depends on `format_mode`:
+
+**If `format_mode = digest` (default):**
 - One aspect per sub-section
 - Feynman Technique: explain as if teaching someone who has never seen this concept
 - **Code examples required** for programming concepts
@@ -158,10 +165,22 @@ echo -e "${BLUE}${BOLD}[3/5] Synthesizing content...${RESET}"
   ✅ Good: <better code with explanation of why it's better>
   ```
 
+**If `format_mode = preserve`:**
+- Extract the source content's existing sections verbatim
+- Apply `###` heading structure if the source uses flat paragraphs
+- Do **NOT** rewrite, paraphrase, add Feynman explanations, or inject code examples
+- Do **NOT** add bad/good comparison patterns
+- Preserve all original code blocks, tables, diagrams, and wording exactly
+- You may fix obvious Markdown formatting errors (unclosed code fences, broken tables) but must not alter any wording
+
 ```bash
+# digest mode:
 echo -e "${GREEN}  ✓${RESET} Abstract: ${DIM}3 key points${RESET}"
 echo -e "${GREEN}  ✓${RESET} Sections: ${DIM}3 sub-sections with code examples${RESET}"
 echo -e "${GREEN}  ✓${RESET} Comparisons: ${DIM}2 bad/good patterns${RESET}"
+# preserve mode:
+echo -e "${GREEN}  ✓${RESET} Abstract: ${DIM}faithful summary${RESET}"
+echo -e "${GREEN}  ✓${RESET} Sections: ${DIM}<N> sections preserved verbatim${RESET}"
 ```
 
 ### 4. Discover Relationships

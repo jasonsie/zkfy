@@ -58,3 +58,6 @@ ENV/
 *.bak
 *.backup
 *.orig
+
+# github
+.github/*

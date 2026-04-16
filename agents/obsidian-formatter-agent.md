@@ -69,6 +69,7 @@ RESET='\033[0m'
 - `today_date`: Current date `YYYY-MM-DD`
 - `vault_root`: Root directory of the Obsidian vault
 - `obsidian_prompt`: Read `~/.claude/prompts/obsidian-note.prompt.md` before starting
+- `format_mode`: `digest` (default) or `preserve`
 
 ## Output
 
@@ -91,6 +92,13 @@ echo -e "${CYAN}  → ${DIM}~/.claude/prompts/obsidian-note.prompt.md${RESET}"
 ```
 Read: ~/.claude/prompts/obsidian-note.prompt.md
 ```
+
+**Format mode override**: If `format_mode` is `preserve`, the following requirements from `obsidian-note.prompt.md` are suspended for the content body:
+- "Didactic Code Examples" — do not add code examples that weren't in the source
+- "Comparative Good vs. Bad Pattern" — do not add `❌ Bad` / `✅ Good` comparisons
+- "Feynman Technique" / "Clarity as if teaching" — do not rewrite for didactic clarity
+
+In `preserve` mode your role is purely mechanical: write frontmatter, apply `### Abstract`, pass `content_sections` through verbatim under `### Content`, and add the `### Links` section. The wording of `content_sections` must not be altered.
 
 ### 2. Generate Filename
 

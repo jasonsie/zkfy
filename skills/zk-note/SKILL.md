@@ -1,6 +1,6 @@
 ---
 name: zk-note
-description: Transform markdown files into fully integrated Zettelkasten literature notes with frontmatter, backlinks, and MOC updates. Use when you need to (1) Create atomic notes from existing markdown, (2) Add proper navigation and categorization, (3) Link notes into your knowledge graph, (4) Apply Feynman-style synthesis (digest mode) or preserve original content verbatim (preserve mode).
+description: Transform markdown files into fully integrated Zettelkasten literature notes with frontmatter, backlinks, and MOC updates. Use when you need to (1) Create atomic notes from existing markdown, (2) Add proper navigation and categorization, (3) Link notes into your knowledge graph, (4) Apply Feynman-style synthesis (--digest, default) or preserve original content verbatim (--preserve).
 ---
 
 # ZK-Note
@@ -9,14 +9,13 @@ Transform markdown into a fully integrated Zettelkasten literature note.
 
 ## Input
 
-$ARGUMENTS — <path-to-markdown-file> [domain] [--format <mode>]
+$ARGUMENTS — <path-to-markdown-file> [domain] [--preserve | --digest]
 
 Optional domain: cs/web/ai/principle/devops/math
 
 Optional flags:
-- **--format** `<mode>` — Controls content transformation depth:
-  - `digest` (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
-  - `preserve`: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
+- **--digest** (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
+- **--preserve**: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
 
 ## Execution Order
 
@@ -57,10 +56,10 @@ Source File
 
 Read the markdown file from the provided path. Extract the source URL if present in the file.
 
-Parse `--format` from `$ARGUMENTS`:
-- If `--format preserve` is present → `format_mode = preserve`
-- If `--format digest` is present → `format_mode = digest`
-- If `--format` is absent → `format_mode = digest` (default)
+Parse flags from `$ARGUMENTS`:
+- If `--preserve` is present → `format_mode = preserve`
+- If `--digest` is present → `format_mode = digest`
+- If neither is present → `format_mode = digest` (default)
 
 ### Step 2: Delegate to zettelkasten-agent (Analysis)
 

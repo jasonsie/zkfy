@@ -11,11 +11,10 @@ Create a well-formed Zettelkasten literature note from an external source.
 $ARGUMENTS — a URL (web page or video), raw text, or file path to transform into a Zettelkasten note.
 
 Optional flags:
-- **--format** `<mode>` — Controls content transformation depth:
-  - `digest` (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
-  - `preserve`: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
+- **--digest** (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
+- **--preserve**: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
 
-Parse `--format` from `$ARGUMENTS` before classifying the input type. Strip the flag from the source value before URL/file detection.
+Parse `--preserve` or `--digest` from `$ARGUMENTS` before classifying the input type. Strip the flag from the source value before URL/file detection. If neither is present, default to `--digest`.
 
 ## Execution
 
@@ -148,7 +147,7 @@ Return the path to the created Markdown file."
 
 Use the `zk-note` skill to orchestrate the integration:
 - Pass the source file path from Phase 1
-- If `--format` was specified, pass it through: append `--format <mode>` to the skill arguments
+- If `--preserve` or `--digest` was specified, pass it through to the skill arguments
 - The skill handles the two-agent pipeline internally:
   1. `zettelkasten-agent` — analyzes content (concept, domain, insights, relationships)
   2. `obsidian-formatter-agent` — formats, writes, and integrates the note into the vault

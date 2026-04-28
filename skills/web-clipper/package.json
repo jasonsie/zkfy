@@ -1,0 +1,13 @@
+{
+  "name": "zkfy-web-clipper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Clip a web page into clean Markdown with locally-materialized attachments. Wraps the defuddle CLI.",
+  "scripts": {
+    "setup": "npm install",
+    "clip": "bash scripts/clip.sh"
+  },
+  "dependencies": {
+    "defuddle": "^0.18.1"
+  }
+}

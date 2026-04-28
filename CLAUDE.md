@@ -65,6 +65,7 @@ skills/
   wiki-log/               # Append-only operation log (.claude/log.md)
   vault-index/            # Enriched vault catalog with Keyword Index (.claude/index.md)
   vault-lint/             # 7 semantic health checks with auto-fix
+  web-clipper/            # URL → raw/<slug>.md via defuddle CLI; attachments → raw/attachments/<slug>/
 hooks/
   hooks.json              # PreToolUse (ZK validation) + PostToolUse (index update signal)
   signal-index-update.sh  # Structure-based vault detection for auto-index hook

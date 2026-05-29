@@ -1,244 +1,130 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Three commands drive everything: `/source-to-zk` (ingest), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
 
-## Repository Overview
+## Scope clarification
 
-This is **zkfy**, a Claude Code plugin that transforms unstructured content (URLs, videos, raw text) into structured Zettelkasten literature notes for Obsidian vaults. The plugin follows a multi-phase pipeline architecture with specialized agents for each transformation step.
+CLAUDE.md is the **developer memory for maintaining the zkfy plugin codebase**. It is _not_ end-user documentation about "how to use zkfy in your vault" — that surface lives in `README.md` and the individual skill/agent files. The rules below are cross-cutting invariants future contributors must preserve. Authoritative single-component specs (modeler output schema, formatter assembly logic, etc.) live in the relevant agent/skill files; CLAUDE.md does not duplicate them.
 
-## Architecture
+See `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for rationale.
 
-### Multi-Phase Pipeline
+## Pipeline shape (3-stage)
 
-The core workflow follows this execution model:
-
-```
-INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → CROSS-POLLINATION → INDEX + LOG → OUTPUT
-```
-
-1. **Input Detection**: Classify source as VIDEO_URL, WEB_URL, or TEXT
-2. **Phase 0 (Conditional)**: Extract video transcripts using `video-agent` agent
-3. **Phase 1**: Convert content to clean Markdown using `markdown-file-agent` agent
-4. **Phase 2**: Integrate into vault using `zk-note` skill, which orchestrates:
-   - `zettelkasten-agent` (Opus) — concept analysis, synthesis, relationship reasoning
-   - `obsidian-formatter-agent` (Sonnet) — filename, frontmatter, navigation, MOCs, file writing
-5. **Phase 2.5**: Cross-pollinate using `cross-pollinator-agent` — update 5-10 existing related notes with backlinks
-6. **Phase 3**: Record the operation — append to `.claude/log.md` via `wiki-log` skill, update `.claude/index.md` via `vault-index` skill
-
-### Agent Hierarchy
-
-Agents are specialized, single-purpose workers that can delegate to other agents:
-
-- **video-agent**: Fetches video transcripts (YouTube, Vimeo)
-- **markdown-file-agent**: Extracts and converts content to Markdown
-  - May delegate to `diagram-agent` for complex visualizations
-- **diagram-agent**: Creates Mermaid diagrams for Obsidian rendering
-- **ascii-diagram-agent**: Creates ASCII diagrams for plain-text contexts
-- **zettelkasten-agent**: Deep content analysis through Zettelkasten principles
-  - Identifies atomic concept, domain classification, key insights
-  - Classifies metadata: Categories, Sub-Categories, Aliases, and tags (Step 2.5)
-  - Writes Feynman-style explanations and code examples
-  - Discovers semantic relationships with existing vault notes
-- **obsidian-formatter-agent**: Vault formatting and integration
-  - Generates Train-Case filenames, frontmatter, note body structure
-  - Discovers and updates Before/Next neighbors
-  - Updates MOCs, writes the final note file
-- **cross-pollinator-agent**: Knowledge graph enrichment
-  - After a new note is created, propagates backlinks to existing related notes
-  - Detects contradictions and adds inline warnings
-  - Append-only — never rewrites existing content, max 10 notes per run
-
-### Component Structure
+Note synthesis runs through three agents in order: **Discover → Distill → Integrate**.
 
 ```
-.claude-plugin/
-  plugin.json              # Plugin manifest
-commands/
-  source-to-zk.md         # Main orchestration command (ingest pipeline)
-  query-to-note.md        # Promote query answers into permanent ZK notes
-  vault-lint.md            # Semantic health checks (contradictions, orphans, gaps)
-agents/
-  *.md                    # Specialized worker agents with YAML frontmatter
-skills/
-  */SKILL.md              # Reusable skill modules
-  vault-search/           # Tiered retrieval: Keyword Index → enriched entry scan → grep fallback
-  wiki-log/               # Append-only operation log (.claude/log.md)
-  vault-index/            # Enriched vault catalog with Keyword Index (.claude/index.md)
-  vault-lint/             # 7 semantic health checks with auto-fix
-  web-clipper/            # URL → raw/<slug>.md via defuddle CLI; attachments → raw/attachments/<slug>/
-hooks/
-  hooks.json              # PreToolUse (ZK validation) + PostToolUse (index update signal)
-  signal-index-update.sh  # Structure-based vault detection for auto-index hook
-reference/
-  hookify/                # Reference implementation (not active)
+zettelkasten-agent (Discover, sonnet)
+  → conceptual-modeler-agent (Distill, opus)
+    → obsidian-formatter-agent (Integrate, sonnet)
 ```
 
-## External Dependencies
+- **zettelkasten-agent** identifies the atomic concept, picks the domain, classifies metadata (Categories / Sub-Categories / Aliases / tags), and discovers related notes. No distillation.
+- **conceptual-modeler-agent** classifies `note_mode` (atom vs thesis) at the start of Distill, then branches its output skeleton accordingly: atom-mode produces `one_line_definition` + optional `why_it_matters` / `boundary` / `code_example`; thesis-mode produces `executive_summary` + a list of `themes` + optional `appendix`. Both modes emit `mental_model` (with `modality_hint` for `diagram-agent`), `spinoff_candidates`, and a mode-aware char-budget self-check.
+- **obsidian-formatter-agent** branches skeleton assembly on `note_mode`, writes the file with `Mode:` frontmatter, wires neighbors, updates MOCs.
 
-### Required Files Outside Repository
+The 3-stage architecture itself is unchanged from ADR-0001 — only the modeler's internal branching and the formatter's assembly logic are mode-aware.
 
-The plugin depends on these external files in the user's environment:
+`--preserve` mode is **removed**. Preserve semantics is incompatible with the 500-char budget; if raw-content storage is needed it belongs in a separate command, not in `zk-note`.
 
-- `~/.claude/prompts/crawler.prompt.md` - Markdown formatting rules for content extraction
-- `~/.claude/prompts/obsidian-note.prompt.md` - Zettelkasten literature note structure rules
+## Non-obvious dependencies
 
-### Expected Vault Structure
+Two prompt files must exist outside this repo or the relevant agents abort:
 
-The target Obsidian vault must have:
+- `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
+- `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
 
-- **Domain folders**: Any top-level directories (auto-discovered — no fixed naming required). Numeric prefixes are stripped (e.g., `111.cs/` → `cs` domain). Exclude list: `y.template/`, `row/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `000.Index/`.
-- **Index folder**: `000.Index/` containing Maps of Content (MOCs) — optional but recommended
-- **Source staging**: `row/` for temporary files
-- **`.claude/log.md`**: Operation log (auto-created by wiki-log skill)
-- **`.claude/index.md`**: Auto-maintained vault catalog with enriched metadata + Keyword Index (auto-created by vault-index skill)
+Agents reference each other via `~/.claude/agents/<name>.md` at runtime. Those paths only resolve once the plugin is installed (symlinked from this repo), so reading the files directly during development means using the in-repo `agents/` path instead.
 
-All skills default to `.` (current working directory) as vault root — run commands from inside your vault.
+## Vault contract
 
-### LLM Wiki Pattern Operations
+All skills default to `.` (cwd) as vault root — commands must run from inside the target vault, not from this plugin repo.
 
-The plugin implements the three core operations from the LLM Wiki Pattern:
+Domain folders are auto-discovered from top-level directories with numeric prefixes stripped (`111.cs/` → `cs`). The exclude list is hardcoded across `vault-index`, `vault-search`, and `vault-lint`: `y.template/`, `row/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `000.Index/`. Adding a new system folder means updating each skill — otherwise it gets treated as a domain.
 
-- **Ingest** (`/source-to-zk`): Process source → create note → cross-pollinate related notes → log + index
-- **Query** (`/query-to-note`): Check for existing synthesis → search vault → synthesize answer → file as permanent note → cross-pollinate → log
-- **Lint** (`/vault-lint`): Scan for contradictions, stale content, orphans, missing pages, concept gaps → auto-fix option → log
+`.claude/log.md` and `.claude/index.md` are auto-generated by `wiki-log` and `vault-index`. Never hand-edit; the next run will overwrite or corrupt them.
 
-## Key Conventions
+## Spinoff backlog convention
 
-### Filename Pattern
+When `conceptual-modeler-agent` detects atomic concepts in source material beyond the primary one, it records them in **`row/_spinoffs.md`**. Like `log.md` and `index.md`, this file is **auto-generated — do not hand-edit**. The future `/spinoff-flush` command consumes it.
 
-All generated notes follow Train-Case naming:
+Write format: one line per candidate, append-only.
+
 ```
-Domain-Concept-Name-In-Train-Case.md
+- [ ] <source-ref> → <concept-name> | rationale: <why this is a separate atom>
 ```
 
-Examples:
-- `Web-React-Server-Components.md`
-- `CS-Binary-Search-Tree.md`
-- `AI-Transformer-Architecture.md`
+`<source-ref>` is the source file path or URL the primary note was built from. The checkbox is consumed by `/spinoff-flush` when the candidate is promoted into a full note.
 
-### Frontmatter Structure
+**Thesis chapter overflow uses the same queue.** Per ADR-0002 D7, when a thesis-mode `### <Theme>` chapter has its own thesis-worthy internal structure, the modeler keeps the chapter inline (with a `完整討論見 [[Deep-Note]]` back-link) AND emits a spinoff candidate with `rationale: "thesis chapter overflow — sub-concept has its own thesis-worthy structure"`. Same write format, same backlog file, same future flush command — no separate convention.
+
+## Note modes
+
+Every note declares `Mode: atom | thesis` in frontmatter (per ADR-0002 D8). The modeler picks the mode; the formatter writes it; `vault-lint` reads it to apply the right required-core check and the right budget rule. ADR-0002 D2 lists the signal tables (atom: defines one concept, ≤ ~15 min / ~2000 words, sub-concepts are vocabulary; thesis: multiple supporting themes, metaphor / argument / multi-authority, ≥ ~15 min / ~2000 words). Edge case: a long deep-dive defining one concept stays atom — content wins over duration.
+
+Authoritative skeleton definitions live in `agents/conceptual-modeler-agent.md` (output) and `agents/obsidian-formatter-agent.md` (assembly). Do not duplicate them here.
+
+| Mode | Required core sections | Body budget rule |
+|---|---|---|
+| atom | `### Definition` / `### Mental Model` / `### Links` | 500-char hard ceiling across body prose |
+| thesis | `### 執行摘要` / `### Mental Model` / ≥ 1 `### <Theme>` chapter / `### Links` | Per-chapter soft target 200–1500 chars; no flat ceiling |
+
+Atom-mode optional sections: `### Why It Matters`, `### Boundary`, `### Code`. Thesis-mode optional section: `### 附錄`. Thesis mode does **not** carry `### Boundary` or `### Code` — the thesis bounds the argument structurally, and code-heavy sources should classify as atom.
+
+## Note conventions (enforced, will fail validation if violated)
+
+Filename: `Domain-Concept-Name-In-Train-Case.md` (e.g. `Web-React-Server-Components.md`).
+
+Frontmatter schema:
 
 ```yaml
----
 Date: YYYY-MM-DD
 Type: literature
+Mode: atom        # REQUIRED: atom | thesis — written by obsidian-formatter-agent from modeler's note_mode
 Categories: []
 Sub-Categories: []
 Aliases: []
-tags: []
+tags: []          # controlled vocabulary — see zettelkasten-agent for the list
 Before: '[[Previous-Note]]'
 Next: '[[Next-Note]]'
 Link: '<source-url>'
 Src: '[[row/src-file]]'
----
 ```
 
-The `tags` field enables cross-domain discovery using a controlled vocabulary:
-`interview-prep`, `career`, `learning-strategy`, `performance`, `security`,
-`testing`, `debugging`, `design-pattern`, `architecture`, `api-design`,
-`concurrency`, `state-management`, `type-system`, `beginner`, `advanced`,
-`reference`, `cheatsheet`, `stub`
+`Before`/`Next` are computed by sorting the domain folder alphabetically and finding the insertion point. Renaming a note means the two neighbors need re-linking — `obsidian-formatter-agent` handles this on ingest but not on manual edits.
 
-The `Before`/`Next` fields create bidirectional navigation by:
-1. Listing all notes in the domain folder
-2. Sorting alphabetically
-3. Finding insertion point for new note
-4. Updating neighbor files' frontmatter
+## Agent delegation pattern
 
-### Note Structure
+<important if="writing or modifying an agent">
+Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read `~/.claude/agents/<name>.md`. The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
+</important>
 
-1. **Frontmatter** - Metadata and navigation
-2. **Abstract** - Choose one format:
-   - List format (preferred): Key points as bullets
-   - Diagram + text: Mermaid diagram + 1-2 sentences
-   - Brief text: 2-3 Feynman-style sentences
-3. **Content sections** - One aspect per section (### level)
-   - Code examples required for programming concepts
-   - Bad vs Good pattern with TypeScript preferred
-4. **Links section** - Backlinks with explanations
+## Error handling decisions (not negotiable)
 
-### Terminal Colors
+- **Video transcription failure → abort the whole workflow.** No fallback to summary, no partial content. A hallucinated transcript poisons every downstream note; we'd rather fail loudly than file a wrong note.
+- **Markdown extraction failure → report and stop, don't guess.** User retries with a different source.
+- **Domain ambiguity → ask the user.** Don't pick heuristically; misclassification is expensive to undo because of the alphabetical Before/Next chain.
 
-All agents use standardized color formatting (defined in `terminal-colors` skill):
+## Body budget per mode
 
-```bash
-RED='\033[91m'      # Errors
-GREEN='\033[92m'    # Success
-YELLOW='\033[93m'   # Warnings
-BLUE='\033[94m'     # Info/progress
-CYAN='\033[96m'     # File paths
-MAGENTA='\033[95m'  # Domain/category
-BOLD='\033[1m'
-DIM='\033[2m'
-RESET='\033[0m'
-```
+The budget rule depends on `Mode:` (per ADR-0002 D5). Both rules share the same calculation method below.
 
-## Development Workflow
+### Atom mode — 500-character hard ceiling
 
-### Testing the Pipeline
+`Mode: atom` notes carry a **500-character hard ceiling** across the body prose. `conceptual-modeler-agent` self-checks it; `vault-lint` Check 9 enforces it as an external gate. The budget covers `### Definition`, `### Why It Matters`, `### Boundary`, and any prose surrounding diagrams or code. If an atom concept cannot fit, the modeler aborts and recommends splitting via the spinoff backlog — do not silently truncate.
 
-To test the full pipeline:
-```bash
-# Ingest: source → ZK note → cross-pollinate → log + index
-/source-to-zk <url-or-text-or-file>
+### Thesis mode — per-chapter soft target
 
-# Query: search vault → synthesize → file as permanent note
-/query-to-note "How does X compare to Y?"
+`Mode: thesis` notes are **exempt from the flat 500-char ceiling**. Instead, each `### <Theme>` chapter has a **soft target of 200–1500 chars** (counted per the same calculation rule below). Total body length across all chapters is unbounded. Dilution discipline in thesis mode is structural (one-atom-per-chapter, table-first for comparisons, quote-for-authority), not lexical — see ADR-0002 D6. When a chapter naturally exceeds 1500 chars *because it has become its own thesis-worthy topic*, the modeler triggers the D7 back-link mechanism (inline essence + `完整討論見 [[Deep-Note]]` + a spinoff backlog entry). `vault-lint` Check 11 (new) flags chapters outside the 200–1500 range; Check 9 is restricted to atom mode.
 
-# Lint: semantic health check
-/vault-lint 333.ai/
-/vault-lint . --fix           # auto-fix weak links, concept gaps, cross-ref gaps
+### Calculation rule (shared)
 
-# Verify logging
-grep "^## \[" .claude/log.md | tail -5
-```
+Count is **Chinese characters + English words**. The following are **excluded** from the count in both modes:
 
-### Modifying Agents
+- Frontmatter (the YAML block between `---` fences)
+- Fenced code blocks (` ``` ` … ` ``` `)
+- Embedded diagrams (Mermaid, ASCII, Image embeds — anything under `### Mental Model`)
+- The `### Links` section
 
-Each agent is defined in `agents/*.md` with:
-- **Frontmatter** (YAML): metadata, capabilities, tools, model, color
-- **System prompt**: Role, procedures, error handling
-- **Terminal output patterns**: Standardized progress indicators
+## Diagrams
 
-When modifying agent files:
-1. Read the `terminal-colors` skill first for output formatting
-2. Maintain the numbered step pattern (`[1/N]`, `[2/N]`, etc.)
-3. Use consistent color codes for similar message types
-4. Follow the zero data loss policy for content extraction
-
-### Agent Delegation Pattern
-
-Agents delegate using the Task tool with `general-purpose` subagent:
-
-```markdown
-Prompt: "You are delegated to act as the <agent-name> agent.
-
-Read the agent instructions at: ~/.claude/agents/<agent-name>.md
-Read the formatting rules at: ~/.claude/prompts/<prompt-file>.md
-
-Then <specific task instructions>
-
-Return: <expected output format>"
-```
-
-### Error Handling Strategy
-
-- **Phase 0 (Video)**: ABORT entire workflow on failure - no fallbacks
-- **Phase 1 (Markdown)**: Report error, suggest alternatives
-- **Phase 2 (Integration)**: Ask user for clarification (e.g., domain selection)
-
-## Plugin Design Principles
-
-1. **Atomic Responsibility**: Each agent has one clear purpose
-2. **Zero Data Loss**: Preserve all source content in transformations
-3. **Progress Visibility**: Use TaskCreate/TaskUpdate for pipeline tracking
-4. **Graceful Degradation**: Agents handle missing optional dependencies
-5. **User Confirmation**: Ask for input when domain/approach is unclear
-6. **Strict Mode for Critical Paths**: Video transcription must succeed or abort
-
-## Important Notes
-
-- The `reference/hookify/` directory contains a reference plugin implementation but is not active in this plugin
-- Diagram generation defaults to Mermaid for Obsidian compatibility, falls back to ASCII for plain-text contexts
-- All agent file paths use `~/.claude/agents/` at runtime (symlinked or aliased to actual location)
-- The plugin assumes prompt files exist - agents will abort if required prompts are missing
+Default to Image, then `ascii-diagram-agent` if that fails, resort to Mermaid, and if all three fail fall back to **Structural Bullets** (≤ 5 component lines under `### Mental Model`). The priority order is **Image > ASCII > Mermaid > Structural Bullets** and applies even for Obsidian targets — `diagram-agent` must honor this order, not its own legacy "use Mermaid for Obsidian" rule.

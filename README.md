@@ -22,7 +22,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 
 1. **Phase 0 (Conditional)**: Extract video transcripts from YouTube/Vimeo
 2. **Phase 1**: Convert content to clean, formatted Markdown
-3. **Phase 2**: Integrate into vault via `zk-note` skill (zettelkasten-agent → obsidian-formatter-agent)
+3. **Phase 2**: Integrate into vault via `zk-note` skill — 4-agent Hybrid Atom/Thesis pipeline (zettelkasten-agent → conceptual-modeler-agent → diagram-agent → obsidian-formatter-agent) plus spinoff backlog write
 4. **Phase 2.5**: Cross-pollinate — update 5-10 existing related notes with backlinks
 5. **Phase 3**: Record the operation — append to `.claude/log.md` and update `.claude/index.md`
 
@@ -39,8 +39,9 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 - **video-agent**: Fetches video transcripts (YouTube, Vimeo)
 - **markdown-file-agent**: Extracts and converts content to Markdown via Firecrawl CLI or WebFetch
 - **diagram-agent**: Creates Mermaid diagrams for complex concepts
-- **zettelkasten-agent** (Opus): Deep content analysis — atomic concept, domain, metadata classification (Categories/Sub-Categories/Aliases/tags), Feynman explanations, relationships
-- **obsidian-formatter-agent** (Sonnet): Vault integration — filename, frontmatter, navigation, MOC updates, file writing
+- **zettelkasten-agent** (Sonnet): Discover layer — atomic concept identification, domain selection, metadata classification (Categories/Sub-Categories/Aliases/tags), related-notes discovery
+- **conceptual-modeler-agent** (Opus): Distill layer — classifies `note_mode` (atom vs thesis per ADR-0002), produces mode-appropriate artifact (atom: one-line definition + optional Why/Boundary/Code; thesis: executive summary + theme chapters + optional appendix), emits mental model + spinoff candidates, self-validates mode-aware char budget
+- **obsidian-formatter-agent** (Sonnet): Integrate layer — mode-branched skeleton assembly, writes `Mode: atom | thesis` frontmatter, filename, navigation, MOC updates, file writing
 - **cross-pollinator-agent** (Sonnet): Knowledge graph enrichment — propagates backlinks to existing related notes, flags contradictions
 
 ### Smart Features
@@ -52,7 +53,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 - **Cross-pollination**: New notes automatically enrich existing related notes with backlinks
 - **Operation logging**: All operations recorded in `.claude/log.md` with structured entries
 - **Vault index**: Auto-maintained catalog at `.claude/index.md` grouped by domain
-- **Semantic linting**: 7 health checks (contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps)
+- **Semantic linting**: 12 health checks (contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps, Concept-First conformance, Hybrid Mode conformance)
 - **Progress tracking**: Visual feedback for each pipeline phase
 
 ## Installation
@@ -151,16 +152,21 @@ Pipeline: vault-search → synthesize → zk-note → cross-pollinate → log + 
 
 #### `/vault-lint` — Semantic Health Checks
 
-Run 7 semantic health checks on the vault to detect contradictions, stale content, orphans, and more.
+Run 12 semantic health checks on the vault to detect contradictions, stale content, orphans, and Concept-First / Hybrid Mode spec violations.
 
 ```bash
 /vault-lint 333.ai/                        # Lint the AI directory
 /vault-lint . --checks 3,4                 # Check orphans and missing pages only
-/vault-lint 111.cs/ --fix                  # Lint CS directory and auto-fix checks 5,6,7
-/vault-lint 222.web/ --checks 1,2          # Contradictions and staleness only
+/vault-lint 111.cs/ --fix                  # Lint CS directory and auto-fix checks 5,6,7,10
+/vault-lint 222.web/ --checks 8,9,10       # Concept-First spec violations only
+/vault-lint . --checks 8,9,11,12           # Hybrid Mode conformance only
 ```
 
-The 7 checks: (1) Contradictions, (2) Stale content, (3) Orphan pages, (4) Missing pages, (5) Weak links [fixable], (6) Concept gaps [fixable], (7) Cross-ref gaps [fixable]
+The 12 checks: (1) Contradictions, (2) Stale content, (3) Orphan pages, (4) Missing pages, (5) Weak links [fixable], (6) Concept gaps [fixable], (7) Cross-ref gaps [fixable], (8) Missing required-core section, (9) Body over 500-char budget, (10) Legacy `--preserve` artifacts [fixable], (11) Thesis chapter budget, (12) Dangling thesis back-link
+
+Checks 8–12 enforce the Concept-First and Hybrid Mode specs (see `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-thesis-mode.md`). Notes with `Date` before 2026-05-28 receive LOW severity for these checks; newer notes get the intrinsic severity.
+
+**Note modes** (ADR-0002). Every note declares `Mode: atom | thesis` in frontmatter. The modeler picks the mode per source: atom notes hold a single concept (≤ 500-char body); thesis notes carry a macro claim with supporting theme chapters (per-chapter 200–1500-char soft target). Completion reports show 🧬 Mode after the note location.
 
 #### `/notion-to-zk` — Notion Page to Zettelkasten
 
@@ -275,7 +281,7 @@ zkfy/
 │   ├── zk-note/                 # Two-agent integration pipeline skill
 │   ├── vault-search/            # Natural language vault search (3-tier + index)
 │   ├── vault-index/             # Auto-maintained vault catalog (.claude/index.md)
-│   ├── vault-lint/              # 7 semantic health checks with auto-fix
+│   ├── vault-lint/              # 12 semantic health checks with auto-fix
 │   ├── wiki-log/                # Append-only operation log (.claude/log.md)
 │   ├── firecrawl-cli/           # Firecrawl CLI reference
 │   └── terminal-colors/         # Standardized output formatting

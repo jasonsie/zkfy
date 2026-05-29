@@ -72,8 +72,8 @@ echo -e "${CYAN}  → ${DIM}<new_note_path>${RESET}"
 ```
 
 Read the new note completely. Extract:
-- Concept name (from filename and `### Abstract`)
-- Key claims (from `### Abstract` and content sections)
+- Concept name (from filename and `### Definition`)
+- Key claims (from `### Definition`, `### Why It Matters` if present, `### Boundary` if present)
 - Domain and Sub-Categories (from frontmatter)
 - Existing `### Links` section entries
 

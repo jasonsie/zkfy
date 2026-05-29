@@ -178,10 +178,13 @@ Clean excessive whitespace (max 2 consecutive newlines).
 
 Use the `zk-note` skill to orchestrate the integration:
 - Pass the staging file path from Phase 0
-- The skill handles the full two-agent pipeline internally:
-  1. `zettelkasten-agent` — analyzes content, detects domain, extracts concept, discovers related notes
-  2. `obsidian-formatter-agent` — generates filename, builds frontmatter (using the URL from `**URL**` field as `Link`, database from `**Source**` as `Src`), writes note, updates neighbors and MOCs
-  3. Cleanup — deletes staging file
+- The skill drives the 4-agent Hybrid Atom/Thesis pipeline internally (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
+  1. `zettelkasten-agent` (sonnet, Discover) — atomic concept, domain, metadata, related notes
+  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs share the queue), and a mode-aware char-budget self-check.
+  3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets
+  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly; generates filename; builds frontmatter (using the URL from `**URL**` field as `Link`, database from `**Source**` as `Src` — Notion-specific mapping orthogonal to the new `Mode:` field); writes `Mode: atom | thesis` (ADR-0002 D8); updates neighbors and MOCs
+  5. Skill side-effect — appends any spinoff candidates to `row/_spinoffs.md`
+  6. Cleanup — deletes staging file
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry
@@ -194,6 +197,7 @@ Output:
 ```
 ✅ Zettelkasten note created from Notion
 📄 Location: <domain>/<filename>.md
+🧬 Mode: <atom | thesis>                        ← from zk-note skill report
 🏷️  Domain: <detected domain> (<keyword matches>)
 🔗 Links: <backlinks added>
 📑 MOC updates: <MOCs modified>

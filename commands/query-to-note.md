@@ -96,9 +96,10 @@ Read each relevant note found in Step 1. Synthesize a comprehensive answer that:
 
 - Draws from multiple vault notes
 - Identifies patterns, contrasts, and connections
-- Uses Feynman-style explanations (teach as if explaining to someone new)
 - Includes code examples where relevant
 - Cites source notes with `[[WikiLinks]]`
+
+The synthesis is raw material handed to `zk-note` in Step 3 — do not pre-format it for the Concept-First skeleton (that's the modeler's job). Just produce a clear, dense answer.
 
 Display the synthesis to the user in chat before proceeding.
 
@@ -110,12 +111,16 @@ Display the synthesis to the user in chat before proceeding.
 
 Write the synthesis to a temporary file at `row/synthesis-<topic-kebab>.md`.
 
-Use the `zk-note` skill to process it through the pipeline:
+Use the `zk-note` skill to process it through the 4-agent Hybrid Atom/Thesis pipeline (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
 
-1. `zettelkasten-agent` — analyzes content (concept, domain, insights, relationships)
-2. `obsidian-formatter-agent` — formats, writes, and integrates the note into the vault
+1. `zettelkasten-agent` (sonnet) — Discover: atomic concept, domain, metadata, related notes
+2. `conceptual-modeler-agent` (opus) — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs share the queue), and a mode-aware char-budget self-check.
+3. `diagram-agent` (sonnet) — Render: Image > ASCII > Mermaid > Structural Bullets
+4. `obsidian-formatter-agent` (sonnet) — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); updates neighbors and MOCs
 
-**Important**: The note Type should be `permanent` (original synthesis), NOT `literature`.
+The skill also appends any spinoff candidates to `row/_spinoffs.md`.
+
+**Important**: The note `Type` should be `permanent` (original synthesis), NOT `literature`. This is orthogonal to `Mode:` — a permanent synthesis can still be either atom or thesis; the modeler picks `Mode:` from the synthesis content regardless of `Type:`.
 
 **Update task**: Mark "Create permanent ZK note from synthesis" as `completed`
 
@@ -150,6 +155,7 @@ Output:
 ```
 ✅ Query filed as permanent note
 📄 Location: <domain>/<filename>.md
+🧬 Mode: <atom | thesis>                        ← from zk-note skill report
 ❓ Question: "<original question>"
 📚 Sources: <N> vault notes consulted
 🔗 Cross-updates: <N> existing notes enriched

@@ -10,11 +10,7 @@ Create a well-formed Zettelkasten literature note from an external source.
 
 $ARGUMENTS — a URL (web page or video), raw text, or file path to transform into a Zettelkasten note.
 
-Optional flags:
-- **--digest** (default): Full Feynman-style rewriting with synthesized code examples and bad/good patterns
-- **--preserve**: Keep original content verbatim; only add structural elements (frontmatter, abstract, links, navigation)
-
-Parse `--preserve` or `--digest` from `$ARGUMENTS` before classifying the input type. Strip the flag from the source value before URL/file detection. If neither is present, default to `--digest`.
+The Concept-First pipeline (see `docs/ADR/0001-concept-first-pipeline.md`) is the only mode. `--preserve` and `--digest` flags are removed.
 
 ## Execution
 
@@ -41,7 +37,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 4. **Integrate into Zettelkasten**
    - Subject: "Integrate into Zettelkasten"
-   - Description: "Use zettelkasten-agent agent to create literature note with frontmatter, links, and MOC updates"
+   - Description: "Run 4-agent Hybrid Atom/Thesis pipeline (zettelkasten → conceptual-modeler classifies note_mode → diagram → obsidian-formatter writes Mode: frontmatter) plus spinoff backlog write"
    - ActiveForm: "Integrating into Zettelkasten"
 
 5. **Cross-pollinate related notes**
@@ -147,11 +143,13 @@ Return the path to the created Markdown file."
 
 Use the `zk-note` skill to orchestrate the integration:
 - Pass the source file path from Phase 1
-- If `--preserve` or `--digest` was specified, pass it through to the skill arguments
-- The skill handles the two-agent pipeline internally:
-  1. `zettelkasten-agent` — analyzes content (concept, domain, insights, relationships)
-  2. `obsidian-formatter-agent` — formats, writes, and integrates the note into the vault
-  3. Cleanup — deletes source file
+- The skill drives the 4-agent Hybrid Atom/Thesis pipeline internally (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for the mode branching):
+  1. `zettelkasten-agent` (sonnet, Discover) — atomic concept, domain, metadata, related notes
+  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches its output skeleton: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs feed the same queue), and a mode-aware char-budget self-check.
+  3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
+  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); updates neighbors and MOCs
+  5. Skill side-effect — appends any spinoff candidates to `row/_spinoffs.md` (both rationale styles share the same format)
+  6. Cleanup — deletes source file
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry
@@ -208,8 +206,10 @@ After all phases complete, output:
 ```
 ✅ Zettelkasten note created
 📄 Location: <domain>/<filename>.md
+🧬 Mode: <atom | thesis>                        ← from zk-note skill report
 🔗 Links: <backlinks added>
 📑 MOC updates: <MOCs modified>
+🪴 Spinoffs queued: <N> (in row/_spinoffs.md)   ← only if N > 0
 🔄 Cross-updates: <N> existing notes enriched
 📝 Logged to: .claude/log.md
 📇 Indexed in: .claude/index.md

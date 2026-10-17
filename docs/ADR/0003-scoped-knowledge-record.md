@@ -6,7 +6,7 @@ Status: Implemented locally; no release/commit implied.
 
 Use one portable Python core in `scripts/knowledge.py` for explicit-vault scoped discovery, read-only search/read, deterministic generation, structural lint, and staged-snapshot validation. PyYAML 6.x is an explicit dependency rather than a second incomplete YAML parser. A per-vault `docs/knowledge/scope.json` controls eligible roots, optional maps/root notes, shard size, schema compatibility, and bilingual synonyms.
 
-Queries never write caches/logs/notes, refresh catalogs, or perform network retrieval. The read-only `query` skill is separate from the write-producing `query-to-note`. Both Pi and Claude can use ordinary shell/file tools, with a machine-local binding supplied by the source-managed adapter in ai-cli-workspace. No Claude-only delegation API is required.
+Queries never write caches/logs/notes, refresh catalogs, or perform network retrieval. The read-only `query` skill is separate from the write-producing `query-to-note`. Both Pi and Claude can use ordinary shell/file tools, with a machine-local binding supplied by the source-managed adapter in ai-dotfiles (formerly ai-cli-workspace). No Claude-only delegation API is required.
 
 ## Navigation and scope
 

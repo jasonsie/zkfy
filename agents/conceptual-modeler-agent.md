@@ -38,8 +38,7 @@ You do **not** scan the vault for related notes (that's done upstream) and you d
 write files (that's done downstream). You think hard about the source, decide its mode, distill
 it to the appropriate artifact shape, and self-enforce the mode-appropriate body budget.
 
-See `~/.claude/CLAUDE.md` for the shared calculation rule, the mode skeletons summary, and the
-spinoff backlog convention. See `docs/ADR/0001-concept-first-pipeline.md` and
+See `~/.claude/CLAUDE.md` for the shared calculation rule and the mode skeletons summary. See `docs/ADR/0001-concept-first-pipeline.md` and
 `docs/ADR/0002-hybrid-atom-thesis-mode.md` for the full rationale.
 
 ---
@@ -322,8 +321,8 @@ echo -e "${GREEN}  ✓${RESET} Appendix: ${DIM}<included | skipped>${RESET}"
 echo -e "${BLUE}${BOLD}[5/6] Detecting spinoffs...${RESET}"
 ```
 
-The spinoff backlog (`row/_spinoffs.md`) is a single queue; both atom-mode atom-spinoffs and
-thesis-mode theme-overflow spinoffs feed it. Apply the right detection rule per mode.
+Spinoff candidates are reported to the user only (never saved to a file); both atom-mode
+atom-spinoffs and thesis-mode theme-overflow spinoffs are reported together. Apply the right detection rule per mode.
 
 #### 5a. Atom-mode spinoff detection (note_mode = atom)
 
@@ -371,8 +370,8 @@ Queue.
 #### 5b. Thesis-mode spinoff detection (note_mode = thesis)
 
 Any theme that triggered the D7 overflow back-link in Step 4b becomes a spinoff candidate.
-The theme stays inline in `themes[]` with `overflow_backlink` set; the spinoff queues the
-future deep note for creation via `/spinoff-flush`.
+The theme stays inline in `themes[]` with `overflow_backlink` set; the spinoff candidate names the
+future deep note for the user to decide on.
 
 Emit the candidate with:
 
@@ -395,8 +394,8 @@ For every candidate from 5a or 5b:
 - Use `Glob` / `Grep` against `vault_root` as a second-line check when in doubt (look for
   filenames matching `<Domain>-<Concept>-*.md`).
 
-Spinoffs will be appended to `row/_spinoffs.md` by downstream tooling. Do not write that file
-yourself — emit them in the output payload. Most atom-mode notes should produce **0–2**
+Spinoffs are listed in the final report by the caller and are not saved. Do not write any file
+for them — emit them in the output payload. Most atom-mode notes should produce **0–2**
 spinoffs; thesis-mode notes typically produce **0–3** (one per overflowed theme). A combined
 payload of 5+ is a smell — either the necessity test was applied too loosely (atom) or too
 many themes are being treated as independent theses (thesis; consider whether some should be

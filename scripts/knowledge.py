@@ -26,7 +26,7 @@ except ImportError:
     sys.exit("Missing PyYAML. Install scripts/requirements-knowledge.txt with the configured Python.")
 
 VERSION = 1
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 POLICY = "docs/knowledge/scope.json"
 MANIFEST = ".claude/index/manifest.json"
 BASELINE = ".claude/lint-baseline.json"
@@ -344,7 +344,8 @@ class Corpus:
         self.hashes = {p: n.sha for p, n in self.notes.items()}
 
     def resolve(self, target, source=None):
-        target, _, anchor = unquote(target).partition("#")
+        # A table cell escapes the alias pipe as `[[Note\|alias]]`; drop the escape.
+        target, _, anchor = unquote(target).rstrip("\\").partition("#")
         if outside_ref(target) or PurePosixPath(target).suffix.lower() in ASSETS:
             return "outside", []
         if not target and source:
@@ -378,7 +379,7 @@ class Corpus:
             else:
                 hint = f"Add a `### {detail}` section, or review whether this note needs a different Mode."
         elif rule == "field":
-            examples = {"Date": "YYYY-MM-DD", "Type": "permanent", "Categories": "[]", "Before": "''", "Next": "''"}
+            examples = {"Date": "YYYY-MM-DD", "Type": "permanent", "Categories": "[]"}
             hint = f"Add `{detail}: {examples.get(detail, 'value')}` to frontmatter; choose the actual date/type/values."
         elif rule == "list-field":
             hint = f"Convert `{detail}` to a YAML list, e.g. `{detail}: [value]`, preserving the intended values."
@@ -417,7 +418,7 @@ class Corpus:
             if not self.scope.is_map(p) and p not in self.scope.files:
                 if not re.fullmatch(r"[A-Za-z]+(?:-[A-Za-z0-9]+)+", PurePosixPath(p).stem):
                     errors.append(("filename", PurePosixPath(p).name))
-                for key in ("Date", "Type", "Categories", "Before", "Next"):
+                for key in ("Date", "Type", "Categories"):
                     if key not in meta:
                         errors.append(("field", key))
                 for key in ("Categories", "Sub-Categories", "Aliases", "tags"):

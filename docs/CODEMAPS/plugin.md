@@ -11,7 +11,7 @@ INPUT (URL/video/text/file)
 [Phase 0] video-agent -----> transcript (conditional: video URLs only)
   |
   v
-[Phase 1] markdown-file-agent --> row/src-*.md
+[Phase 1] markdown-file-agent --> raw/src-*.md
   |          \--- may delegate to diagram-agent
   v
 [Phase 2] zk-note skill orchestrates:
@@ -20,64 +20,55 @@ INPUT (URL/video/text/file)
   |       atomic concept, domain (auto-discovered), metadata, Feynman text, relationships
   |
   +---> obsidian-formatter-agent (Sonnet) --> final .md in vault
-  |       filename, frontmatter, nav links, MOC update, file write
+  |       filename, frontmatter (Before/Next empty), file write, suggested MOC entries (no MOC/neighbor edits)
   v
 [Phase 2.5] cross-pollinator-agent (Sonnet)
-  |       propagate backlinks to 5-10 existing related notes
-  |       flag contradictions with inline warnings
+  |       Dry run: propose backlinks to 5-10 existing related notes (+ suggested MOC entries)
+  |       flag contradictions; apply only user-approved edits
   v
-[Phase 3] wiki-log + vault-index (mandatory, retry on failure)
-          append to .claude/log.md, update .claude/index.md (enriched + Keyword Index)
+[Phase 3] Validate (mandatory)
+          vault-knowledge lint, then vault-knowledge build (catalog is generated only by build; .claude/log.md is frozen)
 ```
 
 ### LLM Wiki Pattern — Three Core Operations
 
 ```
 Ingest:  /source-to-zk  → Phase 0-3 full pipeline
-Query:   /query-to-note  → [dedup check] → vault-search → synthesize → zk-note → cross-pollinate → log
-Lint:    /vault-lint      → 7 semantic checks → [auto-fix] → log
+Query:   /query-to-note  → [dedup check] → vault-knowledge search/read → synthesize → zk-note → cross-pollinate (proposals) → lint + build
+Lint:    /vault-lint      → semantic checks → [proposed fixes, applied on approval]
 ```
 
-### Vault Search — Tiered Retrieval (RAG-like)
+### Vault Retrieval — Scoped CLI
 
 ```
-Query → Step 0 (query analysis + synonym expansion)
-  |
-  v
-Tier 0A: Keyword Index lookup (35 pts) ─── .claude/index.md "## Keyword Index"
-Tier 0B: Enriched entry scan  (30 pts) ─── cats:/sub:/tags:/aka: fields
-  |  ≥ limit? → DONE (skip grep entirely)
-  v
-Tier 0.5: Synthesis dedup     (40 pts) ─── check Type: permanent
-  v
-Tier 1: Alias + Filename grep (25 pts) ─── fallback
-Tier 2: Metadata grep         (20 pts)
-Tier 3: Body grep             (10 pts)
-  v
-Future: Tier -1 qmd hybrid    (50 pts) ─── BM25 + vector (when installed)
+~/.local/bin/vault-knowledge search "<terms>" --limit N
+  → ranked paths + headings + excerpts
+~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"
+  → actual section text (cite before claiming)
 ```
+
+Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is excluded. Commands and skills call the CLI directly (the former `vault-search` skill was folded into `query`).
 
 ## Agents
 
 | Agent | Model | Purpose | Key I/O |
 |-------|-------|---------|---------|
 | `video-agent` | default | Extract video transcripts | URL --> transcript markdown |
-| `markdown-file-agent` | default | Scrape + convert to markdown | URL/text --> `row/src-*.md` |
+| `markdown-file-agent` | default | Scrape + convert to markdown | URL/text --> `raw/src-*.md` |
 | `diagram-agent` | default | Mermaid diagrams for Obsidian | concept --> mermaid code block |
 | `ascii-diagram-agent` | default | ASCII diagrams for plain-text | concept --> ASCII art |
 | `zettelkasten-agent` | Opus | Deep content analysis | source markdown --> analysis (concept, domain, metadata, links) |
-| `obsidian-formatter-agent` | Sonnet | Vault formatting + integration | analysis --> final note file + MOC updates |
-| `cross-pollinator-agent` | Sonnet | Knowledge graph enrichment | new note + candidates --> backlinks added to existing notes |
+| `obsidian-formatter-agent` | Sonnet | Vault formatting + integration | analysis --> final note file + suggested MOC entries |
+| `cross-pollinator-agent` | Sonnet | Knowledge graph enrichment | new note + candidates --> proposed backlinks (dry run); applied only after user approval |
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
 | `zk-note/` | Orchestrates zettelkasten-agent + obsidian-formatter-agent pipeline |
-| `vault-search/` | Tiered retrieval: Keyword Index (0A) → enriched entry scan (0B) → synthesis dedup (0.5) → grep fallback (1-3). CJK-aware. |
-| `vault-index/` | Enriched vault catalog at `.claude/index.md` with per-entry metadata (`cats:`, `sub:`, `tags:`, `aka:` incl. CJK) + Keyword Index (inverted index). Dynamic domain discovery. |
-| `vault-lint/` | 7 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps. Checks 5-7 auto-fixable |
-| `wiki-log/` | Append-only operation log at `.claude/log.md` tracking ingest, query, and lint operations |
+| `query/` | Read-only vault queries via `vault-knowledge search` / `read` |
+| `vault-index/` | Catalog generation: `.claude/index.md` and related files are produced only by `vault-knowledge build` |
+| `vault-lint/` | 7 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps. Checks 5-7 fixes proposed, applied on user approval |
 | `firecrawl-cli/` | Firecrawl CLI usage reference (scrape, crawl, map, search, agent) |
 | `terminal-colors/` | Standardized ANSI color codes for agent output |
 | `x-learn-study-sop/` | 4-phase study SOP: checkpoint, RAG extraction, parallel impl, commit |
@@ -86,9 +77,9 @@ Future: Tier -1 qmd hybrid    (50 pts) ─── BM25 + vector (when installed)
 
 | Command | Trigger | Pipeline Steps |
 |---------|---------|----------------|
-| `/source-to-zk` | URL, text, or file path | Detect type --> [Phase 0] --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 (mandatory) |
-| `/query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-search --> synthesize --> zk-note --> cross-pollinate --> log + index |
-| `/vault-lint` | Directory path [--fix] [--checks] | 7 semantic checks --> [auto-fix 5,6,7] --> log results |
+| `/source-to-zk` | URL, text, or file path | Detect type --> [Phase 0] --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 Validate (mandatory) |
+| `/query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
+| `/vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7, applied on approval] |
 | `/notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
 | `/firecrawl` | Firecrawl subcommand | Direct CLI wrapper (scrape, crawl, map, search, agent) |
 
@@ -97,7 +88,7 @@ Future: Tier -1 qmd hybrid    (50 pts) ─── BM25 + vector (when installed)
 | Event | Script | Purpose |
 |-------|--------|---------|
 | PreToolUse (Write/Edit .md) | `validate-zk-structure.sh` | Redirect notes to `/output` if vault structure invalid |
-| PostToolUse (Write .md) | `signal-index-update.sh` | Signal vault-index --append after note writes (structure-based vault detection) |
+| PostToolUse (Write .md) | `signal-index-update.sh` | Remind about separate catalog maintenance after note writes (structure-based vault detection) |
 
 ## External Dependencies
 
@@ -108,12 +99,11 @@ Future: Tier -1 qmd hybrid    (50 pts) ─── BM25 + vector (when installed)
 | `notion-crawler.prompt.toml` | `~/.claude/prompts/` | /notion-to-zk only |
 | Vault domain folders | Target vault (auto-discovered) | Yes |
 | `000.Index/` MOCs | Target vault | Optional but recommended |
-| `row/` | Target vault | Yes |
-| `.claude/log.md` | Target vault | Auto-created by wiki-log |
-| `.claude/index.md` | Target vault | Auto-created by vault-index |
+| `raw/` | Target vault | Source drop zone (excluded from queries) |
+| `.claude/log.md` | Target vault | Frozen history, no longer written |
+| `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
 | Firecrawl CLI + API key | Global npm | Optional (falls back to WebFetch) |
 | Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
-| qmd | Homebrew or Go install | Optional (Tier -1 hybrid search) |
 
 ## Error Handling
 
@@ -123,7 +113,7 @@ Future: Tier -1 qmd hybrid    (50 pts) ─── BM25 + vector (when installed)
 | Phase 1 (Markdown) | Report error, suggest alternatives |
 | Phase 2 (Integration) | Ask user for clarification |
 | Phase 2.5 (Cross-pollination) | Warn user, note still created |
-| Phase 3 (Log/Index) | Mandatory — retry once, report stale index if still fails |
+| Phase 3 (Validate) | Mandatory — report lint/build failure; pipeline not marked fully successful |
 
 ## Vault-Agnostic Design
 
@@ -136,7 +126,7 @@ zkfy/
   .claude-plugin/plugin.json     # Plugin manifest
   commands/                      # 5 slash commands
   agents/                        # 7 specialized agents
-  skills/                        # 8 reusable skill modules
+  skills/                        # 7 reusable skill modules
   hooks/
     hooks.json                   # PreToolUse + PostToolUse hooks
     validate-zk-structure.sh     # ZK structure validation

@@ -22,7 +22,7 @@ If the target vault has `docs/knowledge/scope.json`, its corpus policy overrides
 - Obtain candidates/sections only through that CLI's `search` and `read`; do not run the unrestricted note-scanner, whole-vault grep/globs, or source-backlog checks. `raw/` is entirely excluded, including in Check 12.
 - Missing `Mode` means an existing legacy profile, not an automatic atom migration. Use the scope's schema compatibility rules for structural checks.
 - Model-assisted contradiction/staleness analysis is a review suggestion, not mechanical factual verification. Dates alone do not establish staleness.
-- `--fix` cannot bypass the vault's authored-change approval gate. Present proposed edits for explicit approval; never run this skill from a query or Git hook. Do not append a log during read-only review.
+- `--fix` never writes logs and cannot bypass the vault's authored-change approval gate. Fixes to authored notes are proposed and applied only after explicit user approval; never run this skill from a query or Git hook.
 
 For unconfigured vaults, the legacy semantic workflow below remains documentation of the old interface; request an explicit scope before scanning. Do not infer permission to inspect excluded sources.
 
@@ -31,7 +31,7 @@ For unconfigured vaults, the legacy semantic workflow below remains documentatio
 `$ARGUMENTS` — `<path> [--fix] [--checks 1,2,3] [--vault PATH]`
 
 - **path**: Directory to lint (e.g., `333.ai/`, `.` for entire vault)
-- **--fix**: Auto-remediate fixable issues (checks 5, 6, 7, 10). Checks 11 and 12 are NOT auto-fixable.
+- **--fix**: Propose fixes for fixable issues (checks 5, 6, 7, 10); apply only those the user explicitly approves. No log is written. Checks 11 and 12 are NOT auto-fixable.
 - **--checks**: Comma-separated check numbers to run (default: all). Valid subsets include the Concept-First trio `--checks 8,9,10` and the Hybrid Mode conformance subset `--checks 8,9,11,12`.
 - **--vault**: Vault root (default: `.` — current working directory, i.e., run from inside your vault)
 
@@ -177,7 +177,7 @@ Notes with fewer than 2 outgoing links in their `### Links` section (not countin
 3. Flag notes with < 2 such links
 
 **Auto-fixable with `--fix`:**
-- Use `vault-search` skill to find related notes based on the note's `Sub-Categories` and `### Abstract`
+- Run `~/.local/bin/vault-knowledge search "<terms>" --limit N` (then `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"`) to find related notes based on the note's `Sub-Categories` and `### Abstract`
 - Suggest links with rationale text and append to `### Links` section
 
 ---
@@ -314,7 +314,7 @@ The `--preserve` mode is removed per ADR-0001 D5. Pre-existing notes may still c
 
 #### Check 11: Thesis chapter budget (MEDIUM post-adoption / LOW pre-adoption)
 
-Per ADR-0002 D5, each `### <Theme>` chapter in a thesis-mode note has a **soft target of 200–1500 chars**. Chapters that fall below 200 are too thin; chapters that exceed 1500 should be compressed OR the modeler should trigger the D7 back-link mechanism (inline essence + `完整討論見 [[Deep-Note]]` + spinoff backlog entry).
+Per ADR-0002 D5, each `### <Theme>` chapter in a thesis-mode note has a **soft target of 200–1500 chars**. Chapters that fall below 200 are too thin; chapters that exceed 1500 should be compressed OR the modeler should trigger the D7 back-link mechanism (inline essence + `完整討論見 [[Deep-Note]]` + spinoff candidate in the report).
 
 The character calculation uses the same exclusion rules as ADR-0001 D4 / CLAUDE.md "Calculation rule" (Chinese characters + English words; exclude frontmatter, fenced code blocks, embedded diagrams, and the `### Links` section).
 
@@ -341,9 +341,9 @@ The character calculation uses the same exclusion rules as ADR-0001 D4 / CLAUDE.
 
 #### Check 12: Dangling thesis back-link (LOW)
 
-Per ADR-0002 D7 and D9, thesis chapters frequently emit `[[Wikilink]]` back-links to deep-dive notes that may not yet exist in the vault (an open spinoff backlog entry indicates the target is queued for promotion). Check 12 catches typos and stale wiki-links left over after `/spinoff-flush` cleanups.
+Per ADR-0002 D7 and D9, thesis chapters frequently emit `[[Wikilink]]` back-links to deep-dive notes that may not yet exist in the vault (the target may be a spinoff candidate the user has not yet promoted). Check 12 catches typos and stale wiki-links.
 
-For each `[[<target>]]` wikilink appearing inside a `### <Theme>` chapter (NOT in `### Links`, NOT in `### 執行摘要`, NOT in `### Mental Model`), verify the target either exists as a file in the vault OR appears as an open (unchecked) item in `row/_spinoffs.md`.
+For each `[[<target>]]` wikilink appearing inside a `### <Theme>` chapter (NOT in `### Links`, NOT in `### 執行摘要`, NOT in `### Mental Model`), verify the target exists as a file in the vault.
 
 **Applies to:** notes with `Mode: thesis`. **Skips:** notes with `Mode: atom` or missing `Mode`.
 
@@ -351,27 +351,25 @@ For each `[[<target>]]` wikilink appearing inside a `### <Theme>` chapter (NOT i
 1. Read `note.frontmatter.Mode`. If not `thesis`, skip this check entirely.
 2. Identify theme chapters per the same method as Check 11 (reserved-names exclusion).
 3. For each theme chapter body, extract all `[[<target>]]` wikilinks. Strip any display-text alias suffix (e.g., `[[Target|Display]]` → `Target`).
-4. For each unique target, verify presence in either location:
-   - **Vault check:** does `<target>.md` exist anywhere under the vault root (any subdirectory)? Use `Glob` with pattern `**/<target>.md`.
-   - **Spinoff backlog check:** does `row/_spinoffs.md` contain an open (unchecked, i.e., `- [ ]`) line whose `<concept-name>` portion matches `<target>` case-insensitively? Per CLAUDE.md "Spinoff backlog convention", lines have the form `- [ ] <source-ref> → <concept-name> | rationale: <why>`. Use `Grep` for `- \[ \]` lines and match `<concept-name>` against `<target>`.
-5. If neither location contains the target, emit finding with `detail` = `"Dangling thesis back-link in chapter '<heading>': [[<target>]] — neither in vault nor in row/_spinoffs.md backlog"`.
-6. Severity is **LOW** always (intrinsic), then passed through the severity-gating helper — though the gate is effectively a no-op since LOW is already the floor. Dangling back-links pointing to not-yet-promoted spinoffs are expected during a healthy backlog cycle; this check exists mainly to catch typos and stale targets.
+4. For each unique target, verify presence in the vault: does `<target>.md` exist anywhere under the vault root (any subdirectory)? Use `Glob` with pattern `**/<target>.md`.
+5. If the target is absent, emit finding with `detail` = `"Dangling thesis back-link in chapter '<heading>': [[<target>]] — not found in vault"`.
+6. Severity is **LOW** always (intrinsic), then passed through the severity-gating helper — though the gate is effectively a no-op since LOW is already the floor. Dangling back-links pointing to not-yet-promoted spinoffs are expected; this check exists mainly to catch typos and stale targets.
 
-**Not auto-fixable** — the user must decide whether to create the missing note, fix the wikilink target, or wait for the next `/spinoff-flush` cycle.
+**Not auto-fixable** — the user must decide whether to create the missing note or fix the wikilink target.
 
 ---
 
-### Step 3: Auto-fix (if --fix)
+### Step 3: Propose Fixes (if --fix)
 
-Only runs when `--fix` flag is provided. Auto-fixable checks: 5, 6, 7, 10. Checks 11 and 12 are NOT auto-fixable; among the Concept-First / Hybrid Mode group, only Check 10 remains auto-fixable.
+Only runs when `--fix` flag is provided. Present each proposed fix to the user and apply only the ones explicitly approved; write no log. Fixable checks: 5, 6, 7, 10. Checks 11 and 12 are NOT auto-fixable; among the Concept-First / Hybrid Mode group, only Check 10 remains auto-fixable.
 
 For each fixable finding:
-1. **Check 5 (Weak links)**: Use `vault-search` to find related notes, add suggested links with rationale to `### Links`
+1. **Check 5 (Weak links)**: Use `~/.local/bin/vault-knowledge search "<terms>" --limit N` and `read` to find related notes, propose suggested links with rationale to `### Links`
 2. **Check 6 (Concept gaps)**: Create stub notes with Train-Case naming, minimal frontmatter, stub Abstract
 3. **Check 7 (Cross-ref gaps)**: Add cross-references to `### Links` sections of both notes in the pair
 4. **Check 10 (Legacy `--preserve` artifacts)**: Apply the conservative fixes documented under Check 10 — delete `format_mode`/`preserve` frontmatter keys, rename `### Abstract` → `### Definition` only when safe. Never touch `### Content` or preserve-era marker comments automatically.
 
-After auto-fixes, re-run the affected checks to confirm resolution.
+After approved fixes are applied, re-run the affected checks to confirm resolution.
 
 ### Step 4: Report
 
@@ -401,7 +399,7 @@ Scanned: {N} notes | Checks run: {check_ids}
 [Check 7] Cross-ref gap: CS-Binary-Search.md <-> CS-Algorithm-Complexity.md (shared: algorithm-analysis)
 
 ---
-Summary: {H} HIGH | {M} MEDIUM | {L} LOW | {F} auto-fixed
+Summary: {H} HIGH | {M} MEDIUM | {L} LOW | {F} fixed (user-approved)
 ```
 
 ## Edge Cases
@@ -410,7 +408,7 @@ Summary: {H} HIGH | {M} MEDIUM | {L} LOW | {F} auto-fixed
 
 **--checks with invalid numbers:** Ignore invalid check numbers, warn the user, run valid ones.
 
-**--fix without fixable issues:** Report "No auto-fixable issues found" in the summary.
+**--fix without fixable issues:** Report "No fixable issues found" in the summary.
 
 **Large vault (whole-vault scan):** Process in batches by top-level directory (111.cs/, 222.web/, etc.) to manage context. Report per-directory then aggregate.
 

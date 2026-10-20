@@ -51,7 +51,7 @@ RESET='\033[0m'
 
 - `new_note_path`: Path to the newly created ZK note
 - `vault_root`: Root directory of the Obsidian vault
-- `candidates`: List of candidate related note paths (from vault-search, max 10)
+- `candidates`: List of candidate related note paths (from `~/.local/bin/vault-knowledge search`, max 10)
 - `dry_run`: Boolean — if true, list proposed changes without executing
 
 ## Output
@@ -143,7 +143,7 @@ echo -e "${DIM}  No contradictions found in remaining candidates${RESET}"
 echo -e "${BLUE}${BOLD}[5/6] Applying updates...${RESET}"
 ```
 
-**If `dry_run` is true**, output a report and stop:
+**If `dry_run` is true**, output a report (with the exact line each edit would insert) and stop:
 
 ```
 DRY RUN — Proposed changes:

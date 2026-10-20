@@ -1,6 +1,6 @@
 ---
 name: zk-note
-description: Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Wire the note into the vault graph with backlinks and MOC updates.
+description: Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Propose backlinks and MOC entries for the new note.
 ---
 
 # ZK-Note
@@ -10,9 +10,9 @@ Atom/Thesis pipeline. Per ADR-0001 (3-stage shape) and ADR-0002 (hybrid mode), t
 pipeline runs four agents — `zettelkasten-agent` (Discover) → `conceptual-modeler-agent`
 (Distill, classifies `note_mode` and emits mode-discriminated payload) → `diagram-agent`
 (Render) → `obsidian-formatter-agent` (Integrate, branches assembly on `note_mode`) —
-followed by a skill-layer spinoff-backlog write (which now ingests both atom-spinoffs and
-thesis-chapter-overflow spinoffs through the same channel) and an optional
-cross-pollination pass.
+followed by a cross-pollination pass that only proposes edits. Spinoff candidates (both
+atom-spinoffs and thesis-chapter-overflow spinoffs) are listed in the final report and
+never saved to a file.
 
 ## Input
 
@@ -28,8 +28,8 @@ separate future command).
 
 ## Execution Order
 
-This skill orchestrates four agents in sequence, then performs a skill-layer side-effect
-to append spinoff candidates, then optionally cross-pollinates existing notes:
+This skill orchestrates four agents in sequence, then proposes cross-pollination edits
+for existing notes (applied only after user approval):
 
 ```
 Source File
@@ -91,29 +91,20 @@ Source File
 │                                │
 │  consumes note_mode (REQUIRED) │ ◄── branches skeleton on mode
 │  → Train-Case filename         │
-│  → frontmatter + Before/Next   │
-│      + Mode: atom | thesis     │
+│  → minimal frontmatter + Mode  │
+│      (no Before/Next)          │
 │  → assemble atom skeleton      │
 │      OR thesis skeleton        │
-│  → update neighbors            │
-│  → update MOCs                 │
+│  → suggest MOC entries         │
 └──────────┬─────────────────────┘
            │ final note path + mode
-           ▼
-┌────────────────────────────────┐
-│  Skill side-effect             │  Backlog write
-│  → append spinoff_candidates   │
-│     (atom-spinoffs AND         │
-│      thesis-chapter-overflow   │
-│      share this queue)         │
-│     to row/_spinoffs.md        │
-└──────────┬─────────────────────┘
-           │
+           │ + suggested MOC entries
            ▼
 ┌────────────────────────────────┐
 │  cross-pollinator-agent        │  Graph enrichment
-│  (sonnet — append-only)        │
-│  → existing notes get backlinks│
+│  (sonnet — Dry run: true)      │
+│  → proposed backlinks, shown   │
+│    to the user for approval    │
 └──────────┬─────────────────────┘
            │
            ▼
@@ -152,15 +143,14 @@ Return the discover_output payload:
 ```
 
 If the zettelkasten-agent asks about domain ambiguity, relay the question to the user
-and re-invoke with the chosen domain. Do not pick heuristically — per CLAUDE.md,
-misclassification is expensive to undo because of the alphabetical Before/Next chain.
+and re-invoke with the chosen domain. Do not pick heuristically.
 
 ### Step 3: Delegate to conceptual-modeler-agent (Distill)
 
 Use the Task tool to delegate to a `general-purpose` subagent. The modeler classifies
 `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches
 its output skeleton accordingly. The skill must propagate the returned `note_mode` to
-Steps 4, 5, and the backlog write — never re-derive it.
+Steps 4 and 5 — never re-derive it.
 
 ```
 Prompt: "You are delegated to act as the conceptual-modeler-agent agent.
@@ -282,61 +272,20 @@ Thesis-mode payload (non-null only when note_mode = thesis):
 
 The Mental Model block is already rendered — paste it under ### Mental Model verbatim.
 Do not regenerate the diagram. Do not rewrite or expand the modeler's prose. Write
-`Mode: <note_mode>` into frontmatter per ADR-0002 D8.
+`Mode: <note_mode>` into frontmatter per ADR-0002 D8. Omit `Before`/`Next`, `Sub-Categories`, and `Link`.
 
 Return:
 - note path and filename
 - mode (atom | thesis)
-- list of neighbors updated
-- list of MOCs updated"
+- suggested MOC entries (MOC path + line); do not edit or create any MOC or neighbor file"
 ```
 
 If the formatter fails, abort. The conceptual_artifact and rendered_diagram_block are
 not lost — the user can re-run from Step 5 once the formatter issue is resolved.
 
-### Step 6: Write Spinoff Backlog (skill-layer side-effect)
+### Step 6: Cross-Pollinate
 
-If `conceptual_artifact.spinoff_candidates` is non-empty, append each candidate to
-`<vault_root>/row/_spinoffs.md`. **Never overwrite** — this file is auto-generated and
-append-only per CLAUDE.md.
-
-The spinoff queue is **mode-agnostic**. A candidate's `rationale` field tells you which
-detection path emitted it, but the on-disk format is identical:
-
-- **Atom-mode atom-spinoffs** (`note_mode = atom`, Step 4a) — rationale describes why a
-  sub-concept passed the necessity test as an independently atomic topic.
-- **Thesis-mode chapter-overflow spinoffs** (`note_mode = thesis`, Step 4b / D7) —
-  rationale is the exact string `"thesis chapter overflow — sub-concept has its own
-  thesis-worthy structure"` emitted verbatim by the modeler. Pass it through unchanged.
-
-Both feed the same `row/_spinoffs.md` queue and the same future `/spinoff-flush`
-consumer; no structural distinction at the skill layer.
-
-If the file does not yet exist, create it with this one-line header on the first write:
-
-```
-# Spinoff backlog (auto-generated; do not hand-edit)
-
-```
-
-Then for each spinoff candidate, append one line in the format documented in CLAUDE.md
-(unchanged across both rationale styles):
-
-```
-- [ ] <source_file> → <spinoff.concept> | rationale: <spinoff.rationale>
-```
-
-`<source_file>` is the path of the source file the primary note was built from (the
-same value passed as `Source file` in Step 5). The checkbox is consumed by the future
-`/spinoff-flush` command when the candidate is promoted into a full note.
-
-Implementation: use Bash with append-redirect (`>>`) or the Edit tool against the
-existing file. The write is best-effort — if it fails, warn but continue (the primary
-note is already created in Step 5).
-
-### Step 7: Cross-Pollinate
-
-Delegate to `cross-pollinator-agent` to update existing related notes with backlinks
+Delegate to `cross-pollinator-agent` to propose backlinks in existing related notes
 to the new note:
 
 ```
@@ -348,32 +297,33 @@ Then cross-pollinate this newly created note:
 New note path: <note path from Step 5>
 Vault root: <vault_root>
 Candidates: <discover_output.related_notes>
-Dry run: false
+Dry run: true
 
-Return the list of files updated and changes made."
+Return the proposed backlink edits."
 ```
 
-If cross-pollination fails, warn but do not abort — the note is already created and
-the backlog is already written.
+Present the proposed edits plus the formatter's suggested MOC entries (MOC path + line)
+to the user. Apply only the ones the user explicitly approves; never create a new MOC
+automatically.
 
-### Step 8: Cleanup & Report
+If cross-pollination fails, warn but do not abort — the note is already created.
 
-Delete the source file from `row/` (the source has been distilled into the new note;
-the spinoff backlog already references the path for later flush).
+### Step 7: Cleanup & Report
+
+Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`; it stays as provenance.
 
 Report completion (the `🧬 Mode` line is always present and reflects the modeler's
-classification; the `🪴 Spinoffs queued` line is conditional on N > 0 and counts both
-atom-spinoffs and thesis-overflow spinoffs together):
+classification; the `🪴 Spinoff candidates (not saved)` line is conditional on N > 0 and
+lists both atom-spinoffs and thesis-overflow spinoffs together):
 
 ```
 ✅ Zettelkasten note created
 📄 Location: <domain>/<filename>.md
 🧬 Mode: <atom | thesis>
 🔗 Backlinks: <N> notes linked
-📑 MOC updates: <MOCs modified>
-🔄 Navigation: Before→<note>→Next
-🪴 Spinoffs queued: <N> (in row/_spinoffs.md)   # only line if N > 0
-🔄 Cross-updates: <N> existing notes enriched
+📑 Suggested MOC entries: <MOC path + line>
+🔄 Cross-updates: <N> existing notes enriched (user-approved only)
+🪴 Spinoff candidates (not saved): <concept — rationale list>   # only line if N > 0
 ```
 
 ## Output
@@ -391,15 +341,14 @@ The pipeline produces:
   The mode is written to frontmatter as `Mode: atom | thesis` by the formatter.
 - **Rendered diagram** composed into the `### Mental Model` section. Modality chosen
   per the Image > ASCII > Mermaid > Structural Bullets priority chain.
-- **Spinoff candidates** appended (one line each) to `<vault_root>/row/_spinoffs.md`
-  for later promotion via the future `/spinoff-flush` command. Atom-mode atom-spinoffs
-  and thesis-mode chapter-overflow spinoffs share this queue with identical format
-  (only `rationale` distinguishes them).
-- **Neighbor updates**: previous/next domain neighbors have their `Before`/`Next`
-  frontmatter rewired through the new note.
-- **MOC updates**: relevant `000.Index/` MOCs gain a wiki-link to the new note.
-- **Cross-pollination**: up to 10 existing related notes gain a backlink to the new
-  note in their `### Links` section (append-only).
+- **Spinoff candidates** listed in the final report only (atom-mode atom-spinoffs and
+  thesis-mode chapter-overflow spinoffs together; only `rationale` distinguishes them).
+  Nothing is written to a file.
+- **Navigation**: the new note has no `Before`/`Next`; no neighbor files are edited.
+- **Suggested MOC entries**: the formatter returns MOC path + line proposals; no MOC is
+  edited or created without explicit user approval.
+- **Cross-pollination**: up to 10 proposed backlinks in existing related notes'
+  `### Links` sections, applied only after explicit user approval.
 
 ## Error Handling
 
@@ -438,16 +387,12 @@ written.
 - Abort. The conceptual_artifact and rendered_diagram_block from Steps 3–4 are not
   lost — the user can re-run Step 5 once the underlying issue is resolved.
 
-**Spinoff backlog write failure:**
-- Warn but continue — the primary note has already been created. The backlog is a
-  best-effort side-effect; the user can manually append missed spinoffs.
-
 **cross-pollinator-agent failure:**
-- Warn but do not abort — the note is already created and the backlog already written.
+- Warn but do not abort — the note is already created.
 
 **No related notes found:**
 - Proceed. The `### Links` section may be empty (cross-pollination will then be a no-op).
 
 **MOC missing:**
-- The formatter creates a new MOC in `000.Index/`. If that fails, ask the user
-  whether to create a new MOC or skip MOC update, and proceed based on the choice.
+- The formatter returns no suggested MOC entry. Never create a new MOC automatically; tell
+  the user and let them decide.

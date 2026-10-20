@@ -25,7 +25,7 @@ One shared implementation serves Pi and Claude Code. Use ordinary shell tools, n
 
 - `raw/` is entirely excluded. Never use broad vault grep/globs, direct reads into excluded paths, source-backlog scans, or old plugin search fallbacks.
 - The CLI's live scoped retrieval remains correct when catalogs are stale or absent. Do NOT rebuild during a query.
-- Do not call `query-to-note`, `wiki-log`, `vault-index`, auto-fix, web search, or source ingestion. Saving an answer requires a separate explicit request.
+- Do not call `query-to-note`, `vault-index`, auto-fix, web search, or source ingestion. Saving an answer requires a separate explicit request.
 - If the launcher/vault is unavailable, report the limitation. Do not claim vault support or silently substitute external/model knowledge. Project work may still use its own code evidence, clearly distinguished.
 - Technical notes inform project decisions; current project constraints and observed code remain authoritative for that project.
 

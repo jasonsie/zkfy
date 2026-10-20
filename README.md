@@ -8,31 +8,31 @@ zkfy automates the process of converting web content, YouTube videos, and raw te
 
 - **Extracts content** from URLs, YouTube videos, or plain text
 - **Generates clean Markdown** following your formatting rules
-- **Integrates into your vault** with proper frontmatter, backlinks, and navigation
-- **Updates Maps of Content (MOCs)** automatically
-- **Creates bidirectional links** between related notes
+- **Integrates into your vault** with proper frontmatter and backlinks
+- **Proposes Maps of Content (MOC) entries** for you to approve
+- **Proposes bidirectional links** between related notes (applied only after your approval)
 
 ## Features
 
 ### Multi-Phase Pipeline
 
 ```
-INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → CROSS-POLLINATION → INDEX + LOG → OUTPUT
+INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATTING → CROSS-POLLINATION (PROPOSALS) → VALIDATE → OUTPUT
 ```
 
 1. **Phase 0 (Conditional)**: Extract video transcripts from YouTube/Vimeo
 2. **Phase 1**: Convert content to clean, formatted Markdown
-3. **Phase 2**: Integrate into vault via `zk-note` skill — 4-agent Hybrid Atom/Thesis pipeline (zettelkasten-agent → conceptual-modeler-agent → diagram-agent → obsidian-formatter-agent) plus spinoff backlog write
-4. **Phase 2.5**: Cross-pollinate — update 5-10 existing related notes with backlinks
-5. **Phase 3**: Record the operation — append to `.claude/log.md` and update `.claude/index.md`
+3. **Phase 2**: Integrate into vault via `zk-note` skill — 4-agent Hybrid Atom/Thesis pipeline (zettelkasten-agent → conceptual-modeler-agent → diagram-agent → obsidian-formatter-agent); spinoff candidates are reported, never saved
+4. **Phase 2.5**: Cross-pollinate — propose backlinks for 5-10 existing related notes (dry run); apply only the ones you approve
+5. **Phase 3**: Validate — run `~/.local/bin/vault-knowledge lint`, then `~/.local/bin/vault-knowledge build` to regenerate the catalog
 
 ### Three Core Operations (LLM Wiki Pattern)
 
 | Operation | Command | Description |
 |-----------|---------|-------------|
-| **Ingest** | `/source-to-zk` | Source → note → cross-pollinate → log + index |
-| **Query** | `/query-to-note` | Search vault → synthesize → file as permanent note → cross-pollinate → log |
-| **Lint** | `/vault-lint` | Detect contradictions, orphans, stale content, concept gaps → auto-fix option → log |
+| **Ingest** | `/source-to-zk` | Source → note → cross-pollinate (proposals) → lint + build |
+| **Query** | `/query-to-note` | Search vault → synthesize → file as permanent note → cross-pollinate (proposals) → lint + build |
+| **Lint** | `/vault-lint` | Detect contradictions, orphans, stale content, concept gaps → proposed fixes applied only on approval |
 
 ### Specialized Agents
 
@@ -41,18 +41,17 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 - **diagram-agent**: Creates Mermaid diagrams for complex concepts
 - **zettelkasten-agent** (Sonnet): Discover layer — atomic concept identification, domain selection, metadata classification (Categories/Sub-Categories/Aliases/tags), related-notes discovery
 - **conceptual-modeler-agent** (Opus): Distill layer — classifies `note_mode` (atom vs thesis per ADR-0002), produces mode-appropriate artifact (atom: one-line definition + optional Why/Boundary/Code; thesis: executive summary + theme chapters + optional appendix), emits mental model + spinoff candidates, self-validates mode-aware char budget
-- **obsidian-formatter-agent** (Sonnet): Integrate layer — mode-branched skeleton assembly, writes `Mode: atom | thesis` frontmatter, filename, navigation, MOC updates, file writing
-- **cross-pollinator-agent** (Sonnet): Knowledge graph enrichment — propagates backlinks to existing related notes, flags contradictions
+- **obsidian-formatter-agent** (Sonnet): Integrate layer — mode-branched skeleton assembly, writes `Mode: atom | thesis` frontmatter, filename, empty `Before`/`Next`, suggested MOC entries, file writing
+- **cross-pollinator-agent** (Sonnet): Knowledge graph enrichment — proposes backlinks to existing related notes (dry run), flags contradictions
 
 ### Smart Features
 
 - **Zero data loss**: Preserves all source content during transformation
 - **Automatic domain detection**: Places notes in correct folders (cs/, web/, ai/, etc.)
-- **Navigation links**: Generates Before/Next frontmatter for sequential reading
+- **Navigation fields**: New notes carry empty `Before`/`Next`; neighbors are never rewired automatically
 - **Diagram generation**: Creates visual aids for complex topics
-- **Cross-pollination**: New notes automatically enrich existing related notes with backlinks
-- **Operation logging**: All operations recorded in `.claude/log.md` with structured entries
-- **Vault index**: Auto-maintained catalog at `.claude/index.md` grouped by domain
+- **Cross-pollination**: New notes propose backlinks to existing related notes; you approve what is applied
+- **Vault catalog**: `.claude/index.md` and related catalog files are generated only by `vault-knowledge build`; `.claude/log.md` is frozen history and is no longer written
 - **Semantic linting**: 12 health checks (contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps, Concept-First conformance, Hybrid Mode conformance)
 - **Progress tracking**: Visual feedback for each pipeline phase
 
@@ -76,10 +75,10 @@ your-vault/
 ├── devops/                # DevOps notes
 ├── math/                  # Math notes
 ├── 000.Index/             # Maps of Content (MOCs)
-├── row/                   # Source staging area
-└── .claude/               # Auto-created by plugin
-    ├── log.md             # Operation log (wiki-log skill)
-    └── index.md           # Vault catalog (vault-index skill)
+├── raw/                   # Source drop zone (excluded from queries)
+└── .claude/               # Generated catalog
+    ├── log.md             # Frozen history (no longer written)
+    └── index.md           # Vault catalog (generated by vault-knowledge build)
 ```
 
 ### Install Plugin
@@ -148,7 +147,7 @@ Search the vault, synthesize an answer, and file it as a permanent Zettelkasten 
 /query-to-note "Summarize all backtracking algorithm patterns in the vault"
 ```
 
-Pipeline: vault-search → synthesize → zk-note → cross-pollinate → log + index
+Pipeline: `vault-knowledge search`/`read` → synthesize → zk-note → cross-pollinate (proposals) → lint + build
 
 #### `/vault-lint` — Semantic Health Checks
 
@@ -157,7 +156,7 @@ Run 12 semantic health checks on the vault to detect contradictions, stale conte
 ```bash
 /vault-lint 333.ai/                        # Lint the AI directory
 /vault-lint . --checks 3,4                 # Check orphans and missing pages only
-/vault-lint 111.cs/ --fix                  # Lint CS directory and auto-fix checks 5,6,7,10
+/vault-lint 111.cs/ --fix                  # Lint CS directory and propose fixes for checks 5,6,7,10 (applied only after approval)
 /vault-lint 222.web/ --checks 8,9,10       # Concept-First spec violations only
 /vault-lint . --checks 8,9,11,12           # Hybrid Mode conformance only
 ```
@@ -194,13 +193,13 @@ Run Firecrawl CLI commands directly from Claude Code.
 
 The plugin generates:
 
-1. **Source file**: Saved to `row/` with original content
-2. **Literature note**: Placed in appropriate domain folder (e.g., `web/`, `ai/`)
-3. **Updated neighbors**: Before/Next links updated in adjacent notes
-4. **MOC updates**: Relevant Maps of Content updated with new entry
-5. **Cross-pollinated notes**: 5-10 existing related notes enriched with backlinks
-6. **Log entry**: Structured record in `.claude/log.md`
-7. **Index update**: Note added to `.claude/index.md` catalog
+1. **Source file**: Saved to `raw/` with original content
+2. **Literature note**: Placed in appropriate domain folder (e.g., `web/`, `ai/`) with empty `Before`/`Next`
+3. **Suggested MOC entries**: MOC path + line, applied only after your approval
+4. **Proposed cross-pollination**: 5-10 existing related notes with proposed backlinks, applied only after your approval
+5. **Spinoff candidates**: Listed in the report only (not saved)
+6. **Lint result**: `~/.local/bin/vault-knowledge lint` violations touching the new or edited files
+7. **Catalog**: Rebuilt via `~/.local/bin/vault-knowledge build`
 
 ### Note Structure
 
@@ -214,10 +213,10 @@ Categories: [Web, React]
 Sub-Categories: [Hooks, State Management]
 Aliases: [React Hooks, useState]
 tags: [design-pattern, advanced]
-Before: '[[Web-Previous-Note]]'
-Next: '[[Web-Next-Note]]'
+Before: ''
+Next: ''
 Link: 'https://source-url.com'
-Src: '[[row/20260210-source]]'
+Src: '[[raw/20260210-source]]'
 ---
 
 # Note Title
@@ -279,10 +278,9 @@ zkfy/
 │   └── cross-pollinator-agent.md # Knowledge graph enrichment (Sonnet)
 ├── skills/
 │   ├── zk-note/                 # Two-agent integration pipeline skill
-│   ├── vault-search/            # Natural language vault search (3-tier + index)
-│   ├── vault-index/             # Auto-maintained vault catalog (.claude/index.md)
-│   ├── vault-lint/              # 12 semantic health checks with auto-fix
-│   ├── wiki-log/                # Append-only operation log (.claude/log.md)
+│   ├── query/                   # Read-only vault queries via vault-knowledge search/read
+│   ├── vault-index/             # Catalog generation via vault-knowledge build
+│   ├── vault-lint/              # 12 semantic health checks; fixes proposed, applied on approval
 │   ├── firecrawl-cli/           # Firecrawl CLI reference
 │   └── terminal-colors/         # Standardized output formatting
 └── hooks/
@@ -297,10 +295,9 @@ The pipeline uses a multi-stage design:
 1. `markdown-file-agent` uses Firecrawl CLI (preferred) or WebFetch to scrape content; may delegate to `diagram-agent` for complex visuals
 2. `zk-note` skill orchestrates the vault integration pipeline:
    - `zettelkasten-agent` (Opus) — analyzes content, extracts atomic concept, writes Feynman explanations
-   - `obsidian-formatter-agent` (Sonnet) — generates filename, frontmatter, navigation links, writes to vault, updates MOCs
-3. `cross-pollinator-agent` (Sonnet) — propagates backlinks to 5-10 existing related notes, flags contradictions
-4. `wiki-log` skill — appends structured entry to `.claude/log.md`
-5. `vault-index` skill — adds note to `.claude/index.md` catalog
+   - `obsidian-formatter-agent` (Sonnet) — generates filename, frontmatter, writes to vault, returns suggested MOC entries
+3. `cross-pollinator-agent` (Sonnet, `Dry run: true`) — proposes backlinks for 5-10 existing related notes, flags contradictions; you approve what is applied
+4. Validate — `~/.local/bin/vault-knowledge lint`, then `~/.local/bin/vault-knowledge build` to regenerate the catalog
 
 Each agent has a single, clear purpose and standardized terminal output formatting.
 
@@ -310,14 +307,14 @@ Each agent has a single, clear purpose and standardized terminal output formatti
 - **Markdown generation failures**: Report error, suggest alternatives
 - **Integration failures**: Ask user for clarification (e.g., domain selection)
 - **Cross-pollination failures**: Warn user, note is still created
-- **Log/index failures**: Warn user, note and cross-pollination are still done
+- **Lint/build failures**: Warn user, note and approved cross-pollination are still done
 
 ## Development
 
 ### Testing
 
 ```bash
-# Ingest: source → ZK note → cross-pollinate → log + index
+# Ingest: source → ZK note → cross-pollinate (proposals) → lint + build
 cd /path/to/vault
 /source-to-zk <test-source>
 
@@ -326,10 +323,7 @@ cd /path/to/vault
 
 # Lint: semantic health check
 /vault-lint 333.ai/
-/vault-lint . --fix           # auto-fix weak links, concept gaps, cross-ref gaps
-
-# Verify logging
-grep "^## \[" .claude/log.md | tail -5
+/vault-lint . --fix           # propose fixes for weak links, concept gaps, cross-ref gaps (applied on approval)
 
 # Test hook validation
 cd hooks/

@@ -26,7 +26,7 @@ metadata classification, raw key insights, and a list of semantically related va
 
 You do **not** distill, synthesize, or write content. Distillation (one-line definition,
 mental model, why-it-matters, boundary, code example, char-budget self-check) happens
-downstream in `conceptual-modeler-agent`. Formatting, neighbor wiring, and MOC updates
+downstream in `conceptual-modeler-agent`. Formatting and suggested MOC entries
 happen further downstream in `obsidian-formatter-agent`.
 
 ---
@@ -98,7 +98,7 @@ Apply the Zettelkasten atomicity principle:
 Determine domain by scanning the vault root for top-level folders:
 
 1. Use Glob `*/` on `vault_root` to list top-level directories
-2. Exclude: `y.template/`, `row/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `.agents/`, `.prompts/`, `.github/`, `.instructions/`, `000.Index/`
+2. Exclude: `y.template/`, `raw/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `.agents/`, `.prompts/`, `.github/`, `.instructions/`, `000.Index/`
 3. Strip numeric prefix from remaining dirs (e.g., `111.cs/` → `cs`, `333.ai/` → `ai`, `notes/` → `notes`)
 4. Pick the best-fit domain based on the concept. If ambiguous, present the available domains and ask the user to choose.
 

@@ -106,7 +106,7 @@ class VaultTest(unittest.TestCase):
         self.assertTrue(any(x["rule"] == "metadata" for x in self.corpus().issues()))
 
     def test_link_resolution_graph_and_code_fences(self):
-        self.put("333.ai/AI-Harness.md", note("[[Web-Memory#Content]]\n[[AI-Harness#^b1]]\ntext ^b1\n```md\n[[Not-A-Note]]\n```\n![[image.png]]\n[[raw/Secret]]"))
+        self.put("333.ai/AI-Harness.md", note("[[Web-Memory#Content]]\n[[AI-Harness#^b1]]\n| [[Web-Memory\\|alias]] |\ntext ^b1\n```md\n[[Not-A-Note]]\n```\n![[image.png]]\n[[raw/Secret]]"))
         c = self.corpus()
         self.assertEqual(c.issues(), [])
         self.put("333.ai/sub/Web-Memory.md", note())
@@ -335,12 +335,14 @@ class VaultTest(unittest.TestCase):
             self.assertEqual(k.search(c, query, 1)[0]['path'], '333.ai/AI-Context-Management.md')
 
     def test_repair_hints_are_specific_and_approval_gated(self):
-        self.put('333.ai/AI-Harness.md', note().replace('### Links', '').replace("Before: ''\n", ''))
+        self.put('333.ai/AI-Harness.md', note().replace('### Links', '').replace("Categories: [AI]\n", '').replace("Before: ''\nNext: ''\n", ''))
         self.put('333.ai/Loose.md', note())
         issues = self.corpus().issues()
         fixes = {(i['rule'], i['detail']): i['fix'] for i in issues}
         self.assertIn('### Links', fixes[('heading', 'Links')])
-        self.assertIn("Before: ''", fixes[('field', 'Before')])
+        self.assertIn("Categories: []", fixes[('field', 'Categories')])
+        self.assertNotIn(('field', 'Before'), fixes)  # Before/Next navigation is optional
+        self.assertNotIn(('field', 'Next'), fixes)
         self.assertIn('AI-Loose.md', fixes[('filename', 'Loose.md')])
         self.assertTrue(all('approval' in i['fix'] for i in issues))
 

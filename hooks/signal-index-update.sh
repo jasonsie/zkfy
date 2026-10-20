@@ -76,7 +76,7 @@ signal = {
     'index_update_needed': True,
     'note_path': sys.argv[1],
     'vault_root': sys.argv[2],
-    'reminder': 'Run vault-index --append <note_path> to keep .claude/index.md current'
+    'reminder': 'Run vault-knowledge lint, then vault-knowledge build, to keep the generated catalog current'
 }
 print(json.dumps(signal))
 " "$FILE_PATH" "$VAULT_ROOT"

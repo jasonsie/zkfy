@@ -24,7 +24,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 1. **Search vault for relevant notes**
    - Subject: "Search vault for relevant notes"
-   - Description: "Use vault-search skill to find notes related to the query"
+   - Description: "Use `~/.local/bin/vault-knowledge search` to find notes related to the query"
    - ActiveForm: "Searching vault"
 
 2. **Synthesize answer from vault knowledge**
@@ -39,13 +39,13 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 4. **Cross-pollinate related notes**
    - Subject: "Cross-pollinate related notes"
-   - Description: "Add backlinks from existing notes to the new synthesis"
+   - Description: "Propose backlinks from existing notes to the new synthesis (dry run); apply only user-approved edits"
    - ActiveForm: "Cross-pollinating notes"
 
-5. **Log and index the new note**
-   - Subject: "Log and index the new note"
-   - Description: "Record the query and result in wiki-log and vault-index"
-   - ActiveForm: "Logging and indexing"
+5. **Validate**
+   - Subject: "Validate"
+   - Description: "Run vault-knowledge lint, then vault-knowledge build to regenerate the catalog"
+   - ActiveForm: "Validating"
 
 6. **Report completion**
    - Subject: "Report completion"
@@ -56,7 +56,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 ### Step 0.5: Check for Existing Synthesis
 
-Before running the full pipeline, do a quick `vault-search` with `--limit 5` using the question as the query.
+Before running the full pipeline, do a quick `~/.local/bin/vault-knowledge search "<question terms>" --limit 5` using the question as the query.
 
 Scan the results for any note flagged `[SYNTHESIS]` (i.e., `Type: permanent` in its frontmatter). If one is found and its abstract substantially covers the question:
 
@@ -82,9 +82,9 @@ If no synthesis match found, proceed directly to Step 1 without prompting.
 
 **Update task**: Mark "Search vault for relevant notes" as `in_progress`
 
-Use the `vault-search` skill with the question as query, `--limit 10`.
+Run `~/.local/bin/vault-knowledge search "<question terms>" --limit 10`.
 
-Read the top results to gather context — these are the source notes for the synthesis.
+Read the top results with `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"` to gather context — these are the source notes for the synthesis.
 
 **Update task**: Mark "Search vault for relevant notes" as `completed`
 
@@ -109,16 +109,16 @@ Display the synthesis to the user in chat before proceeding.
 
 **Update task**: Mark "Create permanent ZK note from synthesis" as `in_progress`
 
-Write the synthesis to a temporary file at `row/synthesis-<topic-kebab>.md`.
+Write the synthesis to a temporary file at `raw/synthesis-<topic-kebab>.md`.
 
 Use the `zk-note` skill to process it through the 4-agent Hybrid Atom/Thesis pipeline (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
 
 1. `zettelkasten-agent` (sonnet) — Discover: atomic concept, domain, metadata, related notes
-2. `conceptual-modeler-agent` (opus) — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs share the queue), and a mode-aware char-budget self-check.
+2. `conceptual-modeler-agent` (opus) — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
 3. `diagram-agent` (sonnet) — Render: Image > ASCII > Mermaid > Structural Bullets
-4. `obsidian-formatter-agent` (sonnet) — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); updates neighbors and MOCs
+4. `obsidian-formatter-agent` (sonnet) — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
 
-The skill also appends any spinoff candidates to `row/_spinoffs.md`.
+Any spinoff candidates are listed in the final report only; nothing is written to a file.
 
 **Important**: The note `Type` should be `permanent` (original synthesis), NOT `literature`. This is orthogonal to `Mode:` — a permanent synthesis can still be either atom or thesis; the modeler picks `Mode:` from the synthesis content regardless of `Type:`.
 
@@ -132,19 +132,21 @@ Delegate to `cross-pollinator-agent`:
 
 - New note path from Step 3
 - Candidate notes from Step 1
-- This adds backlinks from existing notes to the new synthesis
+- `Dry run: true` — this proposes backlinks from existing notes to the new synthesis
+
+Present the proposed edits plus the suggested MOC entries from Step 3 (MOC path + line) to the user. Apply only the ones the user explicitly approves; never create a new MOC automatically.
 
 **Update task**: Mark "Cross-pollinate related notes" as `completed`
 
-### Step 5: Log and Index
+### Step 5: Validate
 
-**Update task**: Mark "Log and index the new note" as `in_progress`
+**Update task**: Mark "Validate" as `in_progress`
 
-Use `wiki-log` skill: `query question="<original question>" searched=<N> result="<note-path>"`
+Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files.
 
-Use `vault-index` skill: `--append <note-path>`
+Run `~/.local/bin/vault-knowledge build` to regenerate the catalog.
 
-**Update task**: Mark "Log and index the new note" as `completed`
+**Update task**: Mark "Validate" as `completed`
 
 ### Step 6: Report
 
@@ -158,8 +160,11 @@ Output:
 🧬 Mode: <atom | thesis>                        ← from zk-note skill report
 ❓ Question: "<original question>"
 📚 Sources: <N> vault notes consulted
-🔗 Cross-updates: <N> existing notes enriched
-📑 MOC updates: <MOCs modified>
+🔗 Cross-updates: <N> existing notes enriched (user-approved only)
+📑 Suggested MOC entries: <MOC path + line>
+🧪 Lint: <result>
+📇 Catalog: rebuilt via vault-knowledge build
+🪴 Spinoff candidates (not saved): <concept — rationale list>   ← only if any
 ```
 
 **Update task**: Mark "Report completion" as `completed`
@@ -172,4 +177,4 @@ Output:
 | 2    | Synthesis too broad      | Ask user to narrow the question                    |
 | 3    | Domain unclear           | Ask user to specify domain                         |
 | 4    | Cross-pollination fails  | Warn, note is still created                        |
-| 5    | Log/index fails          | Warn, note is still created                        |
+| 5    | Lint/build fails         | Warn, note is still created                        |

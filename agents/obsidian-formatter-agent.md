@@ -1,12 +1,11 @@
 ---
-description: "Format and integrate a Zettelkasten note into an Obsidian vault: filename, frontmatter, navigation, backlinks, MOC updates, and file writing"
+description: "Format a Zettelkasten note for an Obsidian vault: filename, frontmatter, backlinks, suggested MOC entries, and file writing"
 whenToUse: "Use when analyzed content needs to be formatted as an Obsidian literature note and integrated into the vault structure"
 capabilities:
   - Generate Train-Case filenames with domain prefix
-  - Build frontmatter with bidirectional navigation (Before/Next)
-  - Discover and update neighbor files
+  - Build the minimal frontmatter (no Before/Next, Sub-Categories, or Link)
   - Format backlinks section from relationship data
-  - Update Maps of Content (MOCs)
+  - Suggest MOC entries (MOC path + line) without editing or creating MOCs
   - Write the final note file
 tools:
   - Read
@@ -72,7 +71,7 @@ Inputs are mode-discriminated. The caller (zk-note skill orchestrator) must alwa
 - `concept`: The core concept name (atom mode) or the macro thesis name (thesis mode), used for filename generation
 - `related_notes`: List of related notes with rationale (for Links section)
 - `source_url`: Original source URL (for frontmatter Link field)
-- `source_file`: Path to source file in `row/` (for frontmatter Src field)
+- `source_file`: Path to source file in `raw/` (for frontmatter Src field)
 - `categories`: Classified categories list from analysis (e.g., `[Web, JavaScript]`)
 - `sub_categories`: Topic keywords from analysis (e.g., `[closures, scope]`)
 - `aliases`: Search terms from analysis (e.g., `[Closure, 閉包, function scope]`)
@@ -101,9 +100,8 @@ Inputs are mode-discriminated. The caller (zk-note skill orchestrator) must alwa
   skeleton (atom: Definition / Mental Model / optional Why It Matters / optional Boundary /
   optional Code / Links; thesis: 執行摘要 / Mental Model / ≥ 1 `### <Theme>` / optional 附錄 /
   Links). Frontmatter includes the new `Mode:` field.
-- Updated neighbor files (Before/Next frontmatter)
-- Updated MOCs in `000.Index/`
-- Returns: note path, filename, mode, neighbors updated, MOCs updated
+- No edits to neighbor notes, MOCs, or any other existing file
+- Returns: note path, filename, mode, suggested MOC entries (MOC path + line) for the user to approve
 
 ---
 
@@ -112,7 +110,7 @@ Inputs are mode-discriminated. The caller (zk-note skill orchestrator) must alwa
 ### 1. Read Formatting Rules
 
 ```bash
-echo -e "${BLUE}${BOLD}[1/6] Reading formatting rules...${RESET}"
+echo -e "${BLUE}${BOLD}[1/5] Reading formatting rules...${RESET}"
 echo -e "${CYAN}  → ${DIM}~/.claude/prompts/obsidian-note.prompt.md${RESET}"
 ```
 
@@ -129,7 +127,7 @@ soft).
 ### 2. Generate Filename
 
 ```bash
-echo -e "${BLUE}${BOLD}[2/6] Generating filename...${RESET}"
+echo -e "${BLUE}${BOLD}[2/5] Generating filename...${RESET}"
 ```
 
 `Domain-Concept-Name-In-Train-Case.md`
@@ -141,16 +139,11 @@ echo -e "${BLUE}${BOLD}[2/6] Generating filename...${RESET}"
 echo -e "${GREEN}✓${RESET} Filename: ${CYAN}Web-React-Server-Components.md${RESET}"
 ```
 
-### 3. Build Frontmatter & Discover Neighbors
+### 3. Build Frontmatter
 
 ```bash
-echo -e "${BLUE}${BOLD}[3/6] Building frontmatter...${RESET}"
+echo -e "${BLUE}${BOLD}[3/5] Building frontmatter...${RESET}"
 ```
-
-**Discover Before/Next:**
-1. List `<domain>/*.md`, sort alphabetically
-2. Find insertion point for new note's filename
-3. Identify Before and Next neighbors
 
 ```yaml
 ---
@@ -158,27 +151,18 @@ Date: <today>
 Type: literature
 Mode: <note_mode>          # REQUIRED — atom | thesis, from modeler output
 Categories: <categories from analysis>
-Sub-Categories: <sub_categories from analysis>
 Aliases: <aliases from analysis>
-tags: <tags from analysis>
-Before: '[[<prev-note-in-dir>]]'
-Next: '[[<next-note-in-dir>]]'
-Link: '<source_url>'
-Src: '[[row/src-<title>]]'
+tags: <tags from analysis>   # facets only: interview-prep, cheatsheet, roadmap, beginner, advanced, tooling; never `reference`
+Src: '<source_url or citation>'
 ---
 ```
 
 **Video sources**: `Link` = original video URL.
 
-```bash
-echo -e "${GREEN}  ✓${RESET} Before: ${CYAN}[[Web-React-Hooks]]${RESET}"
-echo -e "${GREEN}  ✓${RESET} Next: ${CYAN}[[Web-React-State-Management]]${RESET}"
-```
-
 ### 4. Assemble & Write Note
 
 ```bash
-echo -e "${BLUE}${BOLD}[4/6] Assembling note (mode=${note_mode})...${RESET}"
+echo -e "${BLUE}${BOLD}[4/5] Assembling note (mode=${note_mode})...${RESET}"
 ```
 
 Branch the skeleton assembly on `note_mode`. Both branches end with `### Links`, which uses
@@ -251,8 +235,7 @@ Format `related_notes` with rationale:
 ```
 
 For thesis mode, links pointing at yet-unpromoted spinoffs (the `overflow_backlink` targets)
-may appear as dangling wikilinks; `vault-lint` Check 12 cross-checks them against
-`row/_spinoffs.md` so the dangling state is recognized as expected, not flagged as error.
+may appear as dangling wikilinks; `vault-lint` Check 12 reports them as LOW findings only.
 
 #### Write
 
@@ -262,38 +245,24 @@ Write the complete note to `<vault_root>/<domain>/<filename>.md`.
 echo -e "${GREEN}  ✓${RESET} Note (${MAGENTA}${note_mode}${RESET}) written to ${CYAN}<domain>/<filename>.md${RESET}"
 ```
 
-### 5. Update Neighbors
+### 5. Suggest MOC Entries
 
 ```bash
-echo -e "${BLUE}${BOLD}[5/6] Updating neighbors...${RESET}"
+echo -e "${BLUE}${BOLD}[5/5] Suggesting MOC entries...${RESET}"
 ```
 
-Update Before/Next frontmatter in neighbor files:
-- Previous neighbor: set its `Next` to new note
-- Next neighbor: set its `Before` to new note
+Do **not** edit or create any MOC, and do not edit neighbor notes. Return proposals only:
+
+1. Find relevant MOCs in `000.Index/` (read-only)
+2. For each, propose the line to add and where (MOC path + line)
+3. If none matches, say so — never propose creating a new MOC
 
 ```bash
-echo -e "${GREEN}  ✓${RESET} Updated ${CYAN}Web-React-Hooks.md${RESET} ${DIM}(Next → new note)${RESET}"
-echo -e "${GREEN}  ✓${RESET} Updated ${CYAN}Web-React-State-Management.md${RESET} ${DIM}(Before → new note)${RESET}"
+echo -e "${GREEN}  ✓${RESET} Suggested for ${CYAN}000.Index/Web-Development.md${RESET}: ${DIM}- [[Web-React-Server-Components]]${RESET}"
+echo -e "${DIM}  Total: 1 MOC entry suggested (not applied)${RESET}"
 ```
 
-### 6. Update MOCs
-
-```bash
-echo -e "${BLUE}${BOLD}[6/6] Updating MOCs...${RESET}"
-```
-
-1. Find relevant MOC in `000.Index/`
-2. Add wiki-link to new note in correct section
-3. Create new MOC if none matches
-
-```bash
-echo -e "${GREEN}  ✓${RESET} Added to ${CYAN}000.Index/Web-Development.md${RESET}"
-echo -e "${GREEN}  ✓${RESET} Added to ${CYAN}000.Index/React-Ecosystem.md${RESET}"
-echo -e "${DIM}  Total: 2 MOCs updated${RESET}"
-```
-
-Return: note path, filename, neighbors updated, MOCs updated.
+Return: note path, filename, mode, suggested MOC entries (MOC path + line).
 
 ---
 
@@ -306,8 +275,7 @@ Return: note path, filename, neighbors updated, MOCs updated.
 | Missing domain or concept | Abort — caller must provide these | `echo -e "${RED}✗ ABORT:${RESET} Missing required input: domain or concept"` |
 | (atom mode) Missing required-core field (`one_line_definition`, `mental_model`, or `related_notes`) | Abort — atom skeleton cannot be assembled | `echo -e "${RED}✗ ABORT:${RESET} Missing atom required-core field from modeler output"` |
 | (thesis mode) Missing required-core field (`executive_summary`, `mental_model`, empty `themes`, or `related_notes`) | Abort — thesis skeleton cannot be assembled | `echo -e "${RED}✗ ABORT:${RESET} Missing thesis required-core field from modeler output"` |
-| No neighbors found | Create note as first in domain, skip Before/Next | `echo -e "${YELLOW}⚠${RESET} No neighbor notes in domain\n${DIM}  Creating as first note${RESET}"` |
-| No matching MOC | Create new MOC in 000.Index/ | `echo -e "${YELLOW}⚠${RESET} No matching MOC\n${CYAN}→${RESET} Creating new MOC..."` |
+| No matching MOC | Return no MOC suggestion; never create a MOC | `echo -e "${YELLOW}⚠${RESET} No matching MOC\n${DIM}  No suggestion returned${RESET}"` |
 | Write failure | Abort — cannot save note | `echo -e "${RED}✗ ABORT:${RESET} Cannot write note file"` |
 
 ---

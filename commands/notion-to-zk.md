@@ -64,12 +64,17 @@ Create a task list to track pipeline progress:
 
 3. **Integrate into Zettelkasten**
    - Subject: "Integrate into Zettelkasten"
-   - Description: "Transform staging file into literature note with domain detection, frontmatter, links, and MOC updates"
+   - Description: "Transform staging file into literature note with domain detection, frontmatter, links, and suggested MOC entries"
    - ActiveForm: "Integrating into Zettelkasten"
 
-4. **Report completion**
+4. **Validate**
+   - Subject: "Validate"
+   - Description: "Run vault-knowledge lint, then vault-knowledge build to regenerate the catalog"
+   - ActiveForm: "Validating"
+
+5. **Report completion**
    - Subject: "Report completion"
-   - Description: "Output final location, domain, backlinks, and MOC updates"
+   - Description: "Output final location, domain, backlinks, suggested MOC entries, spinoff candidates, and lint result"
    - ActiveForm: "Reporting completion"
 
 **Important**: Update each task's status as you progress.
@@ -158,7 +163,7 @@ Assemble in this order — matching the standard source file format that `zk-not
 
 Clean excessive whitespace (max 2 consecutive newlines).
 
-**Save to**: `row/src-notion-<title-kebab-case>.md`
+**Save to**: `raw/src-notion-<title-kebab-case>.md`
 
 **Error Handling**:
 - **401 Unauthorized**: STOP. Verify token, restart Claude Code
@@ -180,14 +185,23 @@ Use the `zk-note` skill to orchestrate the integration:
 - Pass the staging file path from Phase 0
 - The skill drives the 4-agent Hybrid Atom/Thesis pipeline internally (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
   1. `zettelkasten-agent` (sonnet, Discover) — atomic concept, domain, metadata, related notes
-  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs share the queue), and a mode-aware char-budget self-check.
+  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
   3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets
-  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly; generates filename; builds frontmatter (using the URL from `**URL**` field as `Link`, database from `**Source**` as `Src` — Notion-specific mapping orthogonal to the new `Mode:` field); writes `Mode: atom | thesis` (ADR-0002 D8); updates neighbors and MOCs
-  5. Skill side-effect — appends any spinoff candidates to `row/_spinoffs.md`
+  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly; generates filename; builds frontmatter (using the URL from `**URL**` field as `Src` — Notion-specific mapping orthogonal to the new `Mode:` field); writes `Mode: atom | thesis` (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
+  5. Spinoff candidates — returned in the report only, never written to a file
   6. Cleanup — deletes staging file
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry
+
+### Phase 3: Validate
+
+**Update task**: Mark "Validate" as `in_progress`
+
+1. Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files
+2. Run `~/.local/bin/vault-knowledge build` to regenerate the catalog
+
+**Update task**: Mark "Validate" as `completed`
 
 ### Step 3: Report
 
@@ -200,7 +214,10 @@ Output:
 🧬 Mode: <atom | thesis>                        ← from zk-note skill report
 🏷️  Domain: <detected domain> (<keyword matches>)
 🔗 Links: <backlinks added>
-📑 MOC updates: <MOCs modified>
+📑 Suggested MOC entries: <MOC path + line>
+🧪 Lint: <result>
+📇 Catalog: rebuilt via vault-knowledge build
+🪴 Spinoff candidates (not saved): <concept — rationale list>   ← only if any
 ```
 
 **Update task**: Mark "Report completion" as `completed`

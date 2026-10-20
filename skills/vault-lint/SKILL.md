@@ -14,6 +14,18 @@ Detect contradictions, staleness, orphan pages, missing pages, weak links, conce
 
 **Concept-First conformance** (Checks 8–10) enforces the spec defined in `docs/ADR/0001-concept-first-pipeline.md`. **Hybrid Mode conformance** (Checks 8 mode-branching, 9 atom-only, 11 thesis chapter budget, 12 dangling thesis back-link) enforces `docs/ADR/0002-hybrid-atom-thesis-mode.md`. Pre-adoption notes (`Date` < 2026-05-28) receive downgraded LOW severity per D10.
 
+## Scoped-vault override (check first)
+
+If the target vault has `docs/knowledge/scope.json`, its corpus policy overrides all legacy inventory/search/backlog/auto-fix procedures below:
+
+- Structural report: `python3 -B <zkfy-root>/scripts/knowledge.py --vault "<vault>" lint` (or `~/.local/bin/vault-knowledge lint` for the configured canonical vault).
+- Obtain candidates/sections only through that CLI's `search` and `read`; do not run the unrestricted note-scanner, whole-vault grep/globs, or source-backlog checks. `raw/` is entirely excluded, including in Check 12.
+- Missing `Mode` means an existing legacy profile, not an automatic atom migration. Use the scope's schema compatibility rules for structural checks.
+- Model-assisted contradiction/staleness analysis is a review suggestion, not mechanical factual verification. Dates alone do not establish staleness.
+- `--fix` cannot bypass the vault's authored-change approval gate. Present proposed edits for explicit approval; never run this skill from a query or Git hook. Do not append a log during read-only review.
+
+For unconfigured vaults, the legacy semantic workflow below remains documentation of the old interface; request an explicit scope before scanning. Do not infer permission to inspect excluded sources.
+
 ## Input
 
 `$ARGUMENTS` — `<path> [--fix] [--checks 1,2,3] [--vault PATH]`

@@ -5,7 +5,7 @@
 input=$(cat)
 
 # Extract tool name and file_path from JSON
-tool=$(echo "$input" | jq -r '.tool')
+tool=$(echo "$input" | jq -r '.tool_name // .tool')
 file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
 
 # Only validate for Write/Edit tools with markdown files
@@ -18,6 +18,17 @@ fi
 if [[ -z "$file_path" ]] || [[ ! "$file_path" =~ \.md$ ]]; then
   echo "$input"
   exit 0
+fi
+
+# Configured vaults are recognized by policy, never redirected into output/.
+if python3 -B "$(dirname "$0")/../scripts/knowledge-hook.py" guard "$file_path"; then
+  exit 0
+else
+  status=$?
+  if [[ "$status" != 3 ]]; then
+    printf '%s\n' 'zkfy: scoped hook runtime unavailable; structure check skipped.' >&2
+    exit 0
+  fi
 fi
 
 # Define required ZK folders

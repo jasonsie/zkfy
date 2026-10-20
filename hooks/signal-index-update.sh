@@ -29,6 +29,17 @@ if [[ -z "$FILE_PATH" || "${FILE_PATH##*.}" != "md" ]]; then
     exit 0
 fi
 
+# Scoped vaults use the shared positive allowlist, including maps. No source scans.
+if python3 -B "$(dirname "$0")/../scripts/knowledge-hook.py" index "$FILE_PATH"; then
+    exit 0
+else
+    status=$?
+    if [[ "$status" != 3 ]]; then
+        printf '%s\n' 'zkfy: scoped hook runtime unavailable; reminder skipped.' >&2
+        exit 0
+    fi
+fi
+
 # Walk up the directory tree looking for a .claude/ sibling
 # This detects a zkfied vault without hardcoding any paths
 SEARCH_DIR=$(dirname "$FILE_PATH")
@@ -53,7 +64,7 @@ if [[ -z "$VAULT_ROOT" ]]; then
 fi
 
 # Skip files in excluded directories (not actual notes)
-EXCLUDED_PATTERNS="y.template|/row/|/x.temp/|/docs/|/.obsidian/|/.claude/|/.agents/|/.prompts/|/.github/|/.instructions/|000.Index"
+EXCLUDED_PATTERNS="y.template|/raw/|/row/|/x.temp/|/docs/|/.obsidian/|/.claude/|/.agents/|/.prompts/|/.github/|/.instructions/|000.Index"
 if echo "$FILE_PATH" | grep -qE "$EXCLUDED_PATTERNS"; then
     exit 0
 fi

@@ -3,26 +3,26 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "(tool == \"Write\" || tool == \"Edit\") && tool_input.file_path matches \"\\.md$\"",
+        "matcher": "^(Write|Edit)$",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-zk-structure.sh"
           }
         ],
-        "description": "Validate ZK folder structure and redirect notes to /output if structure is invalid"
+        "description": "Respect scoped vault policy without redirecting files; preserve legacy checks for unconfigured vaults"
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "tool == \"Write\" && tool_input.file_path matches \"\\.md$\"",
+        "matcher": "^(Write|Edit)$",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/signal-index-update.sh"
           }
         ],
-        "description": "Signal index update reminder when a .md note is written to a zkfied vault (structure-based detection via .claude/ directory)"
+        "description": "Remind about separate generated-only maintenance after eligible note/map edits; exclude source paths"
       }
     ]
   }

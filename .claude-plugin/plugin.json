@@ -1,6 +1,6 @@
 {
    "name": "zkfy",
-   "version": "1.0.0",
+   "version": "1.1.0",
    "description": "transform unstructured text into structured Zettelkasten notes with metadata and links",
    "author": {
       "name": "Jason"

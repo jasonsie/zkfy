@@ -54,7 +54,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | Agent | Model | Purpose | Key I/O |
 |-------|-------|---------|---------|
 | `video-agent` | default | Extract video transcripts | URL --> transcript markdown |
-| `markdown-file-agent` | default | Scrape + convert to markdown | URL/text --> `raw/src-*.md` |
+| `markdown-file-agent` | default | Capture + convert to markdown | URL --> `raw/<Page Title>.md` via the global `web-clipper` skill; text/transcript --> `raw/src-*.md` |
 | `diagram-agent` | default | Mermaid diagrams for Obsidian | concept --> mermaid code block |
 | `ascii-diagram-agent` | default | ASCII diagrams for plain-text | concept --> ASCII art |
 | `zettelkasten-agent` | Opus | Deep content analysis | source markdown --> analysis (concept, domain, metadata, links) |
@@ -69,7 +69,6 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `query/` | Read-only vault queries via `vault-knowledge search` / `read` |
 | `vault-index/` | Catalog generation: `.claude/index.md` and related files are produced only by `vault-knowledge build` |
 | `vault-lint/` | 7 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps. Checks 5-7 fixes proposed, applied on user approval |
-| `firecrawl-cli/` | Firecrawl CLI usage reference (scrape, crawl, map, search, agent) |
 | `terminal-colors/` | Standardized ANSI color codes for agent output |
 | `x-learn-study-sop/` | 4-phase study SOP: checkpoint, RAG extraction, parallel impl, commit |
 
@@ -81,7 +80,6 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `/query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
 | `/vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7, applied on approval] |
 | `/notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
-| `/firecrawl` | Firecrawl subcommand | Direct CLI wrapper (scrape, crawl, map, search, agent) |
 
 ## Hooks
 
@@ -102,7 +100,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `raw/` | Target vault | Source drop zone (excluded from queries) |
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
-| Firecrawl CLI + API key | Global npm | Optional (falls back to WebFetch) |
+| `web-clipper` skill | `~/.claude/skills/web-clipper/` (ai_dotfiles) | URL sources; exit 2 means save the page from a browser and rerun with `--html` |
 | Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
 
 ## Error Handling

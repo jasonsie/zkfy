@@ -128,14 +128,17 @@ Then convert this source to structured Markdown:
 Requirements:
 - Zero data loss policy
 - Preserve tables/code/SVGs
-- Output to: raw/src-<title-kebab>.md
+- Web URL: clip it with the global web-clipper skill (python3 ~/.claude/skills/web-clipper/scripts/clip.py "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
+- Text / transcript: output to raw/src-<title-kebab>.md
+- If the clipper exits 2 (bot challenge, login wall, paywall), stop and ask the user to save the page from their browser and rerun with --html <file>; do not substitute WebFetch or any scraper
 - For complex diagrams, you may sub-delegate to ~/.claude/agents/diagram-agent.md
 
 Return the path to the created Markdown file."
 ```
 
 **On success**: Update task to `completed`, store source file path
-**On failure**: Report error, suggest alternatives to user
+**On clipper exit 2**: Ask the user for the saved page HTML, then rerun Phase 1 with `--html <file>`
+**On other failure**: Report error, suggest alternatives to user
 
 ### Phase 2: Zettelkasten Integration
 
@@ -149,7 +152,7 @@ Use the `zk-note` skill to orchestrate the integration:
   3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
   4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
   5. Spinoff candidates — returned in the report only, never written to a file
-  6. Cleanup — deletes only intermediate files this run created; user-dropped `raw/` sources stay
+  6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry

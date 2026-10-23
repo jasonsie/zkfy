@@ -37,7 +37,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 ### Specialized Agents
 
 - **video-agent**: Fetches video transcripts (YouTube, Vimeo)
-- **markdown-file-agent**: Extracts and converts content to Markdown via Firecrawl CLI or WebFetch
+- **markdown-file-agent**: Captures URLs with the global `web-clipper` skill (full page, images localized) and converts text or transcripts to Markdown
 - **diagram-agent**: Creates Mermaid diagrams for complex concepts
 - **zettelkasten-agent** (Sonnet): Discover layer — atomic concept identification, domain selection, metadata classification (Categories/Sub-Categories/Aliases/tags), related-notes discovery
 - **conceptual-modeler-agent** (Opus): Distill layer — classifies `note_mode` (atom vs thesis per ADR-0002), produces mode-appropriate artifact (atom: one-line definition + optional Why/Boundary/Code; thesis: executive summary + theme chapters + optional appendix), emits mental model + spinoff candidates, self-validates mode-aware char budget
@@ -177,17 +177,22 @@ Import any Notion page directly into your vault via MCP integration.
 
 Requires Notion MCP server configured in `.claude/settings.local.json` and a `NOTION_API_KEY`.
 
-#### `/firecrawl` — Web Scraping Utility
+### Web clipping
 
-Run Firecrawl CLI commands directly from Claude Code.
+URL sources are captured by the global `web-clipper` skill (installed from `ai_dotfiles`
+into `~/.claude/skills/web-clipper/`), exactly as Obsidian Web Clipper would: full body,
+the clip frontmatter, and every image, inline SVG and canvas graph saved under the vault's
+attachment folder as `![[…]]` links. `/source-to-zk <url>` uses it in Phase 1, and it can
+be run on its own:
 
-```bash
-/firecrawl scrape https://example.com
-/firecrawl crawl https://example.com --wait --limit 50
-/firecrawl map https://example.com
-/firecrawl search "your query"
-/firecrawl agent "Extract pricing info" --urls https://example.com/pricing
 ```
+/web-clipper https://example.com/article
+/web-clipper --localize raw/some-clip.md      # download remote images of an existing clip
+```
+
+Pages behind a bot challenge, login or paywall cannot be fetched headlessly: the skill
+stops with exit 2, and the recourse is to save the rendered page from your own browser and
+rerun with `--html <file>`. There is no scraping-service fallback.
 
 ### Output
 
@@ -266,8 +271,7 @@ zkfy/
 │   ├── source-to-zk.md          # Ingest: web/video/text → vault
 │   ├── query-to-note.md         # Query: search → synthesize → file as note
 │   ├── vault-lint.md            # Lint: semantic health checks
-│   ├── notion-to-zk.md          # Notion page → vault (via MCP)
-│   └── firecrawl.md             # Firecrawl CLI wrapper
+│   └── notion-to-zk.md          # Notion page → vault (via MCP)
 ├── agents/
 │   ├── video-agent.md            # Video transcript extraction
 │   ├── markdown-file-agent.md    # Content extraction + Markdown conversion
@@ -281,7 +285,6 @@ zkfy/
 │   ├── query/                   # Read-only vault queries via vault-knowledge search/read
 │   ├── vault-index/             # Catalog generation via vault-knowledge build
 │   ├── vault-lint/              # 12 semantic health checks; fixes proposed, applied on approval
-│   ├── firecrawl-cli/           # Firecrawl CLI reference
 │   └── terminal-colors/         # Standardized output formatting
 └── hooks/
     ├── hooks.json               # Event-based automation
@@ -292,7 +295,7 @@ zkfy/
 
 The pipeline uses a multi-stage design:
 
-1. `markdown-file-agent` uses Firecrawl CLI (preferred) or WebFetch to scrape content; may delegate to `diagram-agent` for complex visuals
+1. `markdown-file-agent` captures URLs with the global `web-clipper` skill (text and transcripts are converted directly); may delegate to `diagram-agent` for complex visuals
 2. `zk-note` skill orchestrates the vault integration pipeline:
    - `zettelkasten-agent` (Opus) — analyzes content, extracts atomic concept, writes Feynman explanations
    - `obsidian-formatter-agent` (Sonnet) — generates filename, frontmatter, writes to vault, returns suggested MOC entries
@@ -356,7 +359,7 @@ When modifying agents:
 - **Claude Code**: Latest version
 - **Obsidian**: With proper vault structure
 - **External prompts**: `crawler.prompt.md` and `obsidian-note.prompt.md`
-- **Firecrawl CLI** _(optional, recommended)_: `npm install -g firecrawl` + `FIRECRAWL_API_KEY` for better web scraping
+- **web-clipper skill** _(from `ai_dotfiles`)_: Node 21+, the built `obsidian-clipper` CLI and Python Playwright, for URL sources
 - **Notion MCP** _(optional)_: Required for `/notion-to-zk` command
 
 ## License

@@ -3,9 +3,8 @@ description: "Extract content from URLs, text, or transcripts and produce struct
 whenToUse: "Use when raw content (URL, text, file, video transcript) needs to be converted into a clean, structured Markdown file"
 capabilities:
   - Detect source type (URL, file path, video transcript, raw text)
-  - Scrape web pages via Firecrawl CLI (clean markdown, JS-rendered pages)
-  - Fetch web pages via WebFetch (fallback when Firecrawl unavailable)
-  - Convert HTML to Markdown (headings, code blocks, tables, images, links)
+  - Clip web pages with the global `web-clipper` skill (full page, Web Clipper frontmatter, images and graphs localized)
+  - Convert text and transcripts to Markdown (headings, code blocks, tables, images, links)
   - Preserve SVG as fenced code blocks
   - Verify output quality (zero data loss policy)
   - Delegate diagram conversion to diagram-agent agent
@@ -13,14 +12,12 @@ tools:
   - Read
   - Write
   - Bash
-  - Bash(firecrawl *)
-  - Bash(npx firecrawl *)
-  - WebFetch
 model: sonnet
 color: green
 mode: best-effort
 externalDependencies:
   - "~/.claude/prompts/crawler.prompt.md"
+  - "~/.claude/skills/web-clipper/scripts/clip.py"
 ---
 
 # Markdown File Generator Agent
@@ -30,6 +27,10 @@ externalDependencies:
 You are a content extraction and Markdown conversion specialist. Take a source
 (URL, text, or video transcript) and produce a complete Markdown file with
 **zero data loss**.
+
+Web URLs are never fetched by hand: the global `web-clipper` skill (installed from
+`ai_dotfiles` at `~/.claude/skills/web-clipper/`) captures the page the way Obsidian Web
+Clipper does and stores its images locally. There is no WebFetch or scraping-service fallback.
 
 ---
 
@@ -50,7 +51,6 @@ BOLD='\033[1m'
 DIM='\033[2m'
 RESET='\033[0m'
 ```
-```
 
 ---
 
@@ -58,11 +58,12 @@ RESET='\033[0m'
 
 - `source`: Web URL, raw text, file path, or video transcript from Phase 0
 - `output_dir`: Default `raw/`
-- `crawler_prompt`: Read `~/.claude/prompts/crawler.prompt.md` before starting
+- `crawler_prompt`: Read `~/.claude/prompts/crawler.prompt.md` before starting (text and transcript sources)
 
 ## Output
 
-`<output_dir>/src-<title-kebab-case>.md`
+- Web URL: `<output_dir>/<Page Title>.md` plus `<attachments>/<slug>/` (written by the clipper)
+- Text, file, transcript: `<output_dir>/src-<title-kebab-case>.md`
 
 ---
 
@@ -88,7 +89,7 @@ echo -e "${MAGENTA}🔍${RESET} Detected: ${BOLD}Web URL${RESET}"
 
 | Type | Detection | Validation | Output |
 |------|-----------|------------|--------|
-| Web URL | `http://` or `https://` | Fetch, check HTTP 200 | `echo -e "${GREEN}✓${RESET} Web URL ${DIM}(HTTP 200)${RESET}"` |
+| Web URL | `http://` or `https://` | Clipper exit code (step 3) | `echo -e "${GREEN}✓${RESET} Web URL"` |
 | File path | `/`, `./`, `~` prefix | File exists | `echo -e "${GREEN}✓${RESET} File path ${DIM}(exists)${RESET}"` |
 | Video transcript | `.md` in `raw/` | File exists | `echo -e "${GREEN}✓${RESET} Video transcript ${DIM}(found)${RESET}"` |
 | Raw text | None of above | Non-empty | `echo -e "${GREEN}✓${RESET} Raw text ${DIM}(${#text} chars)${RESET}"` |
@@ -99,28 +100,35 @@ echo -e "${MAGENTA}🔍${RESET} Detected: ${BOLD}Web URL${RESET}"
 echo -e "${BLUE}${BOLD}[3/6] Extracting content...${RESET}"
 ```
 
-**Web URL**: Use `firecrawl scrape` (preferred) for clean, JS-rendered extraction. Fall back to `WebFetch` only if Firecrawl is unavailable.
+**Web URL**: run the clipper through Bash (the vault hook blocks Write/Edit under `raw/`; the
+script writes the note itself):
 
 ```bash
-# Preferred — Firecrawl CLI (see firecrawl-scrape skill for full options)
-firecrawl scrape "<url>" --only-main-content -o "<output_dir>/src-<title-kebab>.md"
-
-# Fallback — WebFetch (when firecrawl CLI not installed)
-# Fetch page → extract main content area → skip nav/footer/ads
+python3 ~/.claude/skills/web-clipper/scripts/clip.py "<url>" --out "<output_dir>" --json
 ```
+
+Read the JSON line on stdout (`note`, `assets`, `warnings`) and act on the exit code:
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| `0` | Clip written, all images local | Continue with the `note` path; skip steps 4–5 |
+| `5` | Clip written, some images left remote | Continue; repeat every warning to the user |
+| `3` | A clip of this page already exists | Reuse the existing file (report its path); rerun with `--force` only if the user asked for a refresh |
+| `2` | Limitation hit: bot challenge, login wall, paywall, or a page that renders nothing headlessly | **Stop.** Ask the user to open the page in their browser, save the rendered page (Save Page As → "Webpage, HTML Only", or copy `document.documentElement.outerHTML` into a file outside `raw/`), then rerun with `--html <file>`. Never substitute WebFetch or another scraper. |
+| `1` | Prerequisites missing (Node 21+, built `obsidian-clipper` CLI, Python Playwright) | Show the message; it names the fix. See `~/.claude/skills/web-clipper/SKILL.md` |
+| `4` | Conversion failed | Report the message; retry once with `--keep-html` so the HTML can be inspected |
 
 ```bash
-echo -e "${GREEN}  ✓${RESET} Page scraped via Firecrawl ${DIM}(main content only)${RESET}"
-echo -e "${DIM}  Size: 52 KB | Words: ~8,000${RESET}"
+echo -e "${GREEN}  ✓${RESET} Page clipped ${DIM}(7 images localized)${RESET}"
 ```
-
-> If Firecrawl outputs the file directly, skip Steps 4–5 and proceed to Step 6 (verify the file was written).
 
 **File / Video transcript**: Read content → extract title from `# Heading` or filename.
 
 **Raw text**: Use as-is → derive title from first line.
 
 ### 4. Convert to Markdown
+
+Text, file and transcript sources only (a clip is already final Markdown).
 
 ```bash
 echo -e "${BLUE}${BOLD}[4/6] Converting to Markdown...${RESET}"
@@ -171,8 +179,9 @@ echo -e "${GREEN}✓${RESET} Valid Markdown syntax"
 echo -e "${BLUE}${BOLD}[6/6] Saving file...${RESET}"
 ```
 
-Filename: `src-<title-kebab-case>.md` (max 60 chars for title)
-Location: `<output_dir>/`
+Web URL: the clipper already saved `<output_dir>/<Page Title>.md`; verify it exists and report its path.
+
+Other sources — filename: `src-<title-kebab-case>.md` (max 60 chars for title), location: `<output_dir>/`
 
 ```bash
 echo -e "${GREEN}${BOLD}✓ File saved:${RESET}"
@@ -186,6 +195,7 @@ echo -e "${DIM}  Size: 45 KB | Lines: 892 | Words: 5,234${RESET}"
 
 Every piece of source content MUST appear in the output.
 If content can't be cleanly converted to Markdown, preserve as raw HTML block.
+A web clip is the durable record of the page: downstream phases must never delete it.
 
 ---
 
@@ -195,8 +205,9 @@ If content can't be cleanly converted to Markdown, preserve as raw HTML block.
 |-------|--------|-----------------|
 | Prompt not found | Warn and proceed with default formatting | `echo -e "${YELLOW}⚠${RESET} crawler.prompt.md not found\n${DIM}  Using default formatting rules${RESET}"` |
 | Unrecognized source type | Abort — cannot determine extraction method | `echo -e "${RED}✗ ABORT:${RESET} Cannot determine source type\n${DIM}  Provide a URL, file path, or raw text${RESET}"` |
-| Firecrawl not installed | Fall back to WebFetch, warn user | `echo -e "${YELLOW}⚠${RESET} firecrawl not found\n${DIM}  Falling back to WebFetch${RESET}"` |
-| HTTP error (URL source) | Abort with status code | `echo -e "${RED}✗ ABORT:${RESET} HTTP <status> fetching URL\n${DIM}  <url>${RESET}"` |
+| Clipper exit 2 (blocked, login, paywall) | Stop; ask the user for the page HTML and rerun with `--html` | `echo -e "${YELLOW}⚠${RESET} Page cannot be fetched headlessly\n${DIM}  Save it from your browser and rerun with --html <file>${RESET}"` |
+| Clipper exit 1 (prerequisites) | Abort; show the message from the script | `echo -e "${RED}✗ ABORT:${RESET} web-clipper prerequisites missing\n${DIM}  See ~/.claude/skills/web-clipper/SKILL.md${RESET}"` |
+| Clipper exit 5 (some images remote) | Continue; list the warnings | `echo -e "${YELLOW}⚠${RESET} 2 images left remote\n${DIM}  <urls>${RESET}"` |
 | Empty content after extraction | Abort — nothing to convert | `echo -e "${RED}✗ ABORT:${RESET} No content extracted\n${DIM}  Source returned empty response${RESET}"` |
 | Malformed HTML | Preserve as raw HTML block, warn | `echo -e "${YELLOW}⚠${RESET} Malformed HTML detected\n${DIM}  Preserving as raw HTML block${RESET}"` |
 | Quality check failure | Warn with specific issues found | `echo -e "${YELLOW}⚠${RESET} Quality issues detected\n${DIM}  Missing headings or broken code blocks${RESET}"` |

@@ -77,7 +77,7 @@ Based on `REFERENCE_TYPE`:
 |------|------------|
 | `pdf` | Use Read tool with `pages` parameter; look up page range in the page-map table in the RAG skill |
 | `md` | Use Read tool on the specific reference `.md` file(s) mapped to this item |
-| `web` | Use WebFetch or `/firecrawl-scrape` to fetch the canonical documentation URL |
+| `web` | Clip the canonical documentation URL with the global `web-clipper` skill (`python3 ~/.claude/skills/web-clipper/scripts/clip.py <url> --out <dir>`); on exit 2 save the page from your browser and rerun with `--html <file>` |
 | `repo` | Use Serena MCP (`mcp__serena__*`) + Grep/Read to scan source code |
 | `none` | Skip to Phase 2 Step 2 (deep research only) |
 
@@ -111,7 +111,6 @@ If running as a subagent, always re-read the source — never rely on context pa
 
 **Research tools available:**
 - `/deep-research` — multi-source deep research with reasoning synthesis
-- `/firecrawl` or `/firecrawl-scrape` — scrape real library source code or live docs
 - `/exa-search` — neural search for finding specific implementations in the wild
 - `/search-first` — research-before-coding: find what already exists before building
 - **Serena MCP** (`mcp__serena__*`) — scan reference source code for real patterns, class hierarchies, and usage examples when the reference is a codebase
@@ -503,13 +502,11 @@ The SOP references skills, MCP servers, and tools that may not all be available 
 | Dependency | Type | Scope | How It's Resolved |
 |-----------|------|-------|-------------------|
 | `/deep-research` | ECC plugin skill | Global | Available everywhere if `everything-claude-code` plugin is installed |
-| `/firecrawl` / `/firecrawl-scrape` | ECC plugin skill | Global | Available everywhere via ECC plugin |
 | `/exa-search` | ECC plugin skill | Global | Available everywhere via ECC plugin. **Requires Exa MCP server** (see below) |
 | `/search-first` | ECC plugin skill | Global | Available everywhere via ECC plugin |
 | `/everything-claude-code:update-docs` | ECC plugin command | Global | Available everywhere via ECC plugin |
 | `doc-updater` agent | ECC plugin agent | Global | Available everywhere via ECC plugin |
 | **Serena MCP** | MCP server | Per-project | Must be in `.mcp.json` (project or parent directory) |
-| **Firecrawl MCP** | MCP server | Per-project | Must be in `.mcp.json` with `FIRECRAWL_API_KEY` |
 | **Exa MCP** | MCP server | User-level | Must be in `~/.claude.json` with `EXA_API_KEY` |
 | **Context7 MCP** | MCP server | User-level | Already in `~/.claude.json` (no key needed) |
 | `WebFetch` / `WebSearch` | Built-in tool | Global | Always available |
@@ -542,11 +539,6 @@ Create a **shared `.mcp.json` at the `programming/` root** so all x-learn projec
     "serena": {
       "command": "uvx",
       "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"]
-    },
-    "firecrawl": {
-      "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
-      "env": { "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}" }
     }
   }
 }
@@ -569,7 +561,6 @@ Move API keys from hardcoded `.mcp.json` values to **environment variables**:
 
 | Key | Set In | How |
 |-----|--------|-----|
-| `FIRECRAWL_API_KEY` | `~/.zshrc` | `export FIRECRAWL_API_KEY="fc-..."` |
 | `EXA_API_KEY` | `~/.zshrc` | `export EXA_API_KEY="..."` |
 
 `.mcp.json` supports `${VAR}` syntax to reference env vars — no hardcoded secrets in config files.
@@ -582,7 +573,7 @@ The following ECC plugin must be installed for skill dependencies to resolve:
 everything-claude-code (v1.9.0+)
 ```
 
-This provides: `/deep-research`, `/firecrawl`, `/firecrawl-scrape`, `/exa-search`, `/search-first`, `/everything-claude-code:update-docs`, `doc-updater` agent, `code-reviewer` agent, and more.
+This provides: `/deep-research`, `/exa-search`, `/search-first`, `/everything-claude-code:update-docs`, `doc-updater` agent, `code-reviewer` agent, and more.
 
 ### Bootstrap Checklist (updated)
 
@@ -590,7 +581,6 @@ When bootstrapping a new x-learn project, verify these dependencies:
 
 - [ ] `everything-claude-code` plugin is installed (`~/.claude/plugins/`)
 - [ ] Parent `.mcp.json` exists at `programming/` root (or create per-project)
-- [ ] `FIRECRAWL_API_KEY` env var is set
 - [ ] `EXA_API_KEY` env var is set (if using `/exa-search`)
 - [ ] Exa MCP is in `~/.claude.json` (if using `/exa-search`)
 - [ ] Context7 MCP is in `~/.claude.json` (already done)

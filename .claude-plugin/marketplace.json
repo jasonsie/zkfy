@@ -12,7 +12,7 @@
     {
       "name": "zkfy",
       "description": "Transform unstructured content (URLs, videos, text) into structured Zettelkasten literature notes with metadata, backlinks, and automatic MOC integration.",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "author": {
         "name": "Jason"
       },

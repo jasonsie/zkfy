@@ -61,13 +61,14 @@ RESET='\033[0m'
 A discover-layer analysis containing:
 
 - `domain`: Target domain folder (`cs/`, `web/`, `ai/`, `principle/`, `devops/`, `math/`)
-- `concept`: The single atomic concept name
+- `folder`: Sub-folder inside the chosen domain, picked only from the existing folders the orchestrator lists in the prompt. Empty when the orchestrator lists none. Never invent a folder
+- `concept`: The single atomic concept name, usable as an English Train-Case filename part (ASCII letters and digits, hyphen-separated, e.g. `Postgres-Index-Internals`)
 - `key_insights`: Raw bullet points capturing the source's main takeaways (NOT distilled prose)
 - `source_url`: Extracted from source file if present
 - `related_notes`: List of existing vault notes with relationship rationale
 - `categories`: Primary + secondary categories from controlled vocabulary
 - `sub_categories`: Topic-level classification (lowercase-kebab)
-- `aliases`: 3-5 search terms (common name, abbreviation, CJK translation, synonyms)
+- `aliases`: 3-5 search terms (common name, abbreviation, CJK translation, synonyms). A source title in another language goes here, not in `concept`
 - `tags`: Cross-cutting concerns from controlled tag vocabulary
 
 Downstream `conceptual-modeler-agent` consumes this output to produce the distilled artifact.
@@ -93,7 +94,7 @@ echo -e "${BLUE}${BOLD}[2/4] Identifying atomic concept...${RESET}"
 
 Apply the Zettelkasten atomicity principle:
 - **One note = one concept**. If the source covers multiple concepts, identify the primary one.
-- Name the concept clearly and concisely.
+- Name the concept clearly and concisely. The name must work as an English Train-Case filename part: ASCII letters and digits only, words joined by hyphens (e.g. `Postgres-Index-Internals`). If the source title is not English, translate the concept and put the original title in `aliases`.
 
 Determine domain by scanning the vault root for top-level folders:
 
@@ -101,6 +102,7 @@ Determine domain by scanning the vault root for top-level folders:
 2. Exclude: `y.template/`, `raw/`, `x.temp/`, `docs/`, `.obsidian/`, `.claude/`, `.agents/`, `.prompts/`, `.github/`, `.instructions/`, `000.Index/`
 3. Strip numeric prefix from remaining dirs (e.g., `111.cs/` → `cs`, `333.ai/` → `ai`, `notes/` → `notes`)
 4. Pick the best-fit domain based on the concept. If ambiguous, present the available domains and ask the user to choose.
+5. Pick the `folder`: choose a sub-folder of the domain only from the existing folders the orchestrator lists in the prompt. If none fits clearly, ask the user to choose, same as an ambiguous domain. Never invent a folder.
 
 ```bash
 echo -e "${MAGENTA}📁${RESET} Domain: ${BOLD}web/${RESET}"
@@ -175,6 +177,7 @@ Return all analysis results to the caller.
 | Issue | Action | Terminal Output |
 |-------|--------|-----------------|
 | Empty source file | Abort — nothing to analyze | `echo -e "${RED}✗ ABORT:${RESET} Source file is empty"` |
+| Unclear sub-folder | Ask user to choose from the listed folders; never invent one | `echo -e "${YELLOW}⚠${RESET} Cannot determine folder\n${CYAN}→${RESET} Asking user..."` |
 | Ambiguous domain | Ask user to choose | `echo -e "${YELLOW}⚠${RESET} Cannot determine domain\n${CYAN}→${RESET} Asking user..."` |
 | Multiple concepts | Identify primary concept; pass others through `key_insights` so the downstream modeler can record spinoffs | `echo -e "${YELLOW}⚠${RESET} Multiple concepts detected\n${DIM}  Primary: <concept> | others passed downstream for spinoff backlog${RESET}"` |
 | No related notes found | Return empty `related_notes` list | `echo -e "${YELLOW}⚠${RESET} No related notes found in vault"` |

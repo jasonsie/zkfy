@@ -171,8 +171,71 @@ class ReorgTest(unittest.TestCase):
         self.assertEqual(units[0]["line"], 10)
         self.assertEqual(len({u["id"] for u in units}), len(units))
 
+    def test_ledger_check_requires_a_row_per_unit_and_verifies_kept_text(self):
+        this, binding = r.units(THIS), r.units(THIS_BINDING)
+        texts = {"a/Cs-Javascript-This.md": THIS, "a/Cs-Javascript-This-Binding.md": THIS_BINDING}
+
+        def row(path, unit, status, **extra):
+            return {"note": path, "unit": unit["id"], "status": status, **extra}
+
+        rows = [row("a/Cs-Javascript-This.md", this[0], "reworded", heading="Abstract")]
+        rows += [row("a/Cs-Javascript-This.md", u, "kept") for u in this[1:]]
+        rows += [row("a/Cs-Javascript-This-Binding.md", binding[0], "reworded", heading="Abstract"),
+                 row("a/Cs-Javascript-This-Binding.md", binding[1], "duplicate", of=this[1]["id"]),
+                 row("a/Cs-Javascript-This-Binding.md", binding[2], "kept"),
+                 row("a/Cs-Javascript-This-Binding.md", binding[3], "kept")]
+        report = r.ledger_check(texts, DRAFT, {"version": 1, "rows": rows})
+        self.assertTrue(report["ok"], report)
+        self.assertEqual([x["status"] for x in report["review"]], ["reworded", "reworded", "duplicate"])
+        self.assertEqual(report["counts"], {"kept": 8, "reworded": 2, "duplicate": 1})
+
+        missing = r.ledger_check(texts, DRAFT, {"version": 1, "rows": rows[:-1]})
+        self.assertFalse(missing["ok"])
+        self.assertEqual([(m["note"], m["kind"]) for m in missing["missing"]], [("a/Cs-Javascript-This-Binding.md", "links")])
+
+        bad = r.ledger_check(texts, DRAFT.replace("Ask who called the function", "Ask who invoked it"), {"version": 1, "rows": rows})
+        self.assertEqual([m["heading"] for m in bad["mismatch"]], ["Quick Decision Flowchart"])
+
+        rows[-3]["of"] = "u-000000000000"
+        dangling = r.ledger_check(texts, DRAFT, {"version": 1, "rows": rows})
+        self.assertEqual(len(dangling["dangling"]), 1)
+        self.assertFalse(dangling["ok"])
+
     JS = "111.cs/language/javascript/"
 
+
+DRAFT = """---
+Date: 2026-11-04
+Type: literature
+Categories: [CS, JavaScript]
+Aliases: [this keyword, this binding, Cs-Javascript-This]
+---
+### Abstract
+`this` is bound at call time: how a function is called decides its receiver.
+### Content
+#### Five Binding Rules
+The value of `this` depends on how a function is called.
+
+1. Default binding falls back to the global object.
+2. Implicit binding uses the call-site object.
+3. Explicit binding uses call, apply or bind.
+
+| Rule | Example |
+|---|---|
+| Default | `f()` |
+| Implicit | `obj.f()` |
+
+#### Quick Decision Flowchart
+Ask who called the function, then walk the rules in order.
+
+```js
+function f() { return this; }
+```
+#### Interview Questions
+What does `this` refer to inside an arrow function?
+### Links
+- [[Cs-Javascript-Scope]] - scope decides variables, this decides the receiver
+"""
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,3 +99,64 @@ def units(text: str):
         push("paragraph", i, lines[i:j])
         i = j
     return out
+
+
+def preview(unit):
+    return {"note": unit["note"], "unit": unit["id"], "kind": unit["kind"], "heading": unit["heading"],
+            "line": unit["line"], "text": unit["text"][:120]}
+
+
+def ledger_check(texts, draft, ledger):
+    """The preservation check: one row per unit of every clustered note; kept rows must be in the draft."""
+    draft_norm = normalize(draft)
+    draft_links = {m[1].split("|", 1)[0].strip().casefold() for m in k.WIKI.finditer(draft)}
+    all_units = {}
+    for path, text in texts.items():
+        for u in units(text):
+            all_units[(path, u["id"])] = {**u, "note": path}
+    report: dict = {"missing": [], "unknown": [], "mismatch": [], "dangling": [], "invalid": [], "review": []}
+    rows = ledger.get("rows", []) if isinstance(ledger, dict) else []
+    statuses = {}
+    for row in rows:
+        key = (row.get("note"), row.get("unit"))
+        if key not in all_units:
+            report["unknown"].append(row)
+            continue
+        if key in statuses:
+            report["invalid"].append({**row, "problem": "duplicate row for one unit"})
+            continue
+        statuses[key] = row.get("status")
+    for key, status in statuses.items():
+        unit = all_units[key]
+        row = next(x for x in rows if (x.get("note"), x.get("unit")) == key)
+        if status == "kept":
+            if unit["kind"] == "links":
+                targets = {m[1].split("|", 1)[0].strip().casefold() for m in k.WIKI.finditer(unit["text"])}
+                ok = targets <= draft_links
+            else:
+                ok = normalize(unit["text"]) in draft_norm
+            if not ok:
+                report["mismatch"].append(preview(unit))
+        elif status == "duplicate":
+            of = row.get("of")
+            carried = any(s in ("kept", "reworded") and u["id"] == of for (p, _), s in statuses.items() for u in [all_units[(p, _)]])
+            entry = {**preview(unit), "status": status, "of": of}
+            if not carried:
+                report["dangling"].append(entry)
+            report["review"].append(entry)
+        elif status in ("reworded", "dropped"):
+            entry = {**preview(unit), "status": status}
+            for field in ("heading", "reason"):
+                if field in row:
+                    entry[field] = row[field]
+            if status == "dropped" and not row.get("reason"):
+                report["invalid"].append({**row, "problem": "dropped rows need a reason"})
+            report["review"].append(entry)
+        else:
+            report["invalid"].append({**row, "problem": f"unknown status {status!r}"})
+    for key, unit in all_units.items():
+        if key not in statuses:
+            report["missing"].append(preview(unit))
+    report["counts"] = dict(sorted(k.Counter(statuses.values()).items()))
+    report["ok"] = not any(report[x] for x in ("missing", "unknown", "mismatch", "dangling", "invalid"))
+    return report

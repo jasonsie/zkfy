@@ -105,6 +105,22 @@ class VaultTest(unittest.TestCase):
         self.put("333.ai/AI-Bad.md", note(extra="Type: permanent\n"))
         self.assertTrue(any(x["rule"] == "metadata" for x in self.corpus().issues()))
 
+    def test_clip_mode_is_verbatim_with_links_only(self):
+        # ADR-0004: a clip note needs only ### Links; its in-page anchors belong to the source page.
+        clip = ("---\nDate: 2026-01-01\nType: literature\nMode: clip\nCategories: [AI]\nAliases: [原標題]\n"
+                "Link: 'https://example.com/a'\n---\n# Page heading\n### Abstract\nSee [below](#filepos405292).\n"
+                "![[AI-Clip-01-hero.avif|hero]]\n![[AI-Clip-02-chart.heic]]\n\n---\n### Links\n- [[AI-Harness]]\n")
+        self.put("333.ai/AI-Clip.md", clip)
+        self.assertEqual(self.corpus().issues(), [])
+        self.put("333.ai/AI-Clip.md", clip.replace("[[AI-Harness]]", "[[AI-Harness#Nowhere]]"))
+        self.assertEqual([x["rule"] for x in self.corpus().issues()], ["link-anchor"])
+        self.put("333.ai/AI-Clip.md", clip.replace("### Links", "### Other"))
+        self.assertEqual([x["detail"] for x in self.corpus().issues()], ["Links"])
+        self.put("333.ai/AI-Atom.md", note("See [x](#missing).", "atom"))
+        self.assertIn("link-anchor", [x["rule"] for x in self.corpus().issues() if x["path"] == "333.ai/AI-Atom.md"])
+        self.assertTrue(k.FILENAME_RE.fullmatch("Database-Postgres-Index-Internals"))
+        self.assertFalse(k.FILENAME_RE.fullmatch("深入理解-Postgres"))
+
     def test_link_resolution_graph_and_code_fences(self):
         self.put("333.ai/AI-Harness.md", note("[[Web-Memory#Content]]\n[[AI-Harness#^b1]]\n| [[Web-Memory\\|alias]] |\ntext ^b1\n```md\n[[Not-A-Note]]\n```\n![[image.png]]\n[[raw/Secret]]"))
         c = self.corpus()

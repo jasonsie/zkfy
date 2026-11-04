@@ -31,7 +31,12 @@ POLICY = "docs/knowledge/scope.json"
 MANIFEST = ".claude/index/manifest.json"
 BASELINE = ".claude/lint-baseline.json"
 DENIED = {"raw", "row", "template", "y.template", "x.temp", "z.attachments", "docs"}
-ASSETS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".pdf", ".canvas", ".mp4", ".base"}
+# Links with these suffixes are attachments: resolve() reports them "outside" and never checks them.
+# The image suffixes match the web-clipper's IMAGE_EXTS so clip embeds are not read as note links.
+ASSETS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif", ".bmp", ".ico", ".tif", ".tiff", ".heic",
+          ".pdf", ".canvas", ".mp4", ".base"}
+# Note filenames: ASCII Train-Case `Domain-Concept-Name`; clip_note.py imports this.
+FILENAME_RE = re.compile(r"[A-Za-z]+(?:-[A-Za-z0-9]+)+")
 STOP = set("a an the and or of to in for on with my me help how what which is are should works work across multiple based notes please use coding".split())
 WIKI = re.compile(r"!?\[\[([^\]\n]+)\]\]")
 MDLINK = re.compile(r"(?<!!)\[[^\]\n]*\]\(([^\s)]+)\)")
@@ -398,7 +403,7 @@ class Corpus:
         elif rule == "type":
             hint = "Set Type to literature, permanent, fleeting, or structure according to the note's role."
         elif rule == "mode":
-            hint = "Use Mode: atom or Mode: thesis with matching sections, or omit Mode for a legacy note."
+            hint = "Use Mode: atom, thesis or clip with matching sections, or omit Mode for a legacy note."
         elif rule == "link-ambiguous":
             _, matches = self.resolve(detail, path)
             hint = "Choose the intended path-qualified target from: " + ", ".join(f"`{p}`" for p in matches[:5]) + "."
@@ -415,8 +420,9 @@ class Corpus:
         for p, note in self.notes.items():
             errors = list(note.errors)
             meta = note.meta
+            mode = meta.get("Mode", "legacy")
             if not self.scope.is_map(p) and p not in self.scope.files:
-                if not re.fullmatch(r"[A-Za-z]+(?:-[A-Za-z0-9]+)+", PurePosixPath(p).stem):
+                if not FILENAME_RE.fullmatch(PurePosixPath(p).stem):
                     errors.append(("filename", PurePosixPath(p).name))
                 for key in ("Date", "Type", "Categories"):
                     if key not in meta:
@@ -426,11 +432,12 @@ class Corpus:
                         errors.append(("list-field", key))
                 if meta.get("Type") not in (None, "literature", "permanent", "fleeting", "structure"):
                     errors.append(("type", str(meta["Type"])))
-                mode = meta.get("Mode", "legacy")
                 hs = {h.casefold() for _, h in note.headings}
                 if meta.get("Type") not in ("fleeting", "structure"):
                     required = {"atom": ["Definition", "Mental Model", "Links"],
                                 "thesis": ["Mental Model", "Links"],
+                                "clip": ["Links"],  # ADR-0004: the body is the verbatim source
+
                                 "legacy": ["Abstract", "Links"]}
                     if mode not in required:
                         errors.append(("mode", str(mode)))
@@ -449,6 +456,8 @@ class Corpus:
                 targets += [m[1].split("|", 1)[0] for m in WIKI.finditer(str(meta.get(key, "")))]
             for target in targets:
                 status, _ = self.resolve(target, p)
+                if status == "anchor" and mode == "clip" and not unquote(target).partition("#")[0]:
+                    continue  # ADR-0004: a clip's in-page anchors belong to the source page
                 if status not in ("ok", "outside"):
                     errors.append(("link-" + status, target))
             for rule, detail in sorted(set(errors)):

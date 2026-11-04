@@ -310,7 +310,7 @@ If cross-pollination fails, warn but do not abort — the note is already create
 
 ### Step 7: Cleanup & Report
 
-Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`, nor a clip written by the `web-clipper` plugin (`raw/<Page Title>.md` and its attachment folder); they stay as provenance.
+Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`, nor a clip written by the `web-clipper` plugin (`raw/<Page Title>.md` and its attachment folder); they stay as provenance. The one exception is `clip-to-zk`, which adopts its own clip and removes the raw copy after verification (ADR-0004).
 
 Report completion (the `🧬 Mode` line is always present and reflects the modeler's
 classification; the `🪴 Spinoff candidates (not saved)` line is conditional on N > 0 and

@@ -43,6 +43,8 @@ Do not infer a knowledge vault from the current project directory. The installed
 
 `.claude/index.md` and related catalog files (`.claude/index/`, `.claude/QUALITY.md`, manifest) are generated only by `vault-knowledge build`. Never hand-edit them. `.claude/log.md` is frozen history and is no longer written. Existing notes, MOCs, and neighbor navigation are never edited automatically; ingest prompts return proposals (including `cross-pollinator-agent` with `Dry run: true`) that the user approves.
 
+**Raw lifecycle exception.** `/source-to-zk` raw clips stay durable: its distilled notes need the raw clip beside them. `clip-to-zk` instead deletes the `raw/` capture it created, only after the new note passes verification and lint (ADR-0004). It touches only that run's files.
+
 ## Reorganization (vault-reorg)
 
 - One concept, one note: merge only notes that explain the same concept; related notes get links, series stay.
@@ -62,9 +64,13 @@ When `conceptual-modeler-agent` detects atomic concepts in source material beyon
 
 **Thesis chapter overflow uses the same list.** Per ADR-0002 D7, when a thesis-mode `### <Theme>` chapter has its own thesis-worthy internal structure, the modeler keeps the chapter inline (with a `完整討論見 [[Deep-Note]]` back-link) AND emits a spinoff candidate with `rationale: "thesis chapter overflow — sub-concept has its own thesis-worthy structure"`.
 
+## Verbatim notes
+
+`/zkfy:clip-to-zk` files a source verbatim as a `Mode: clip` note, through `skills/clip-to-zk/SKILL.md` and `scripts/clip_note.py`. It is not part of the 3-stage pipeline: no modeler, diagram or formatter. The `web-clipper` plugin owns the clip files (fetching, images, moving an adopted clip); zkfy owns the frontmatter, filename, folder and `### Links`. See `docs/ADR/0004-clip-mode-verbatim-notes.md` and `docs/plans/clip-to-zk.md`.
+
 ## Note modes
 
-Every note declares `Mode: atom | thesis` in frontmatter (per ADR-0002 D8). The modeler picks the mode; the formatter writes it; `vault-lint` reads it to apply the right required-core check and the right budget rule. ADR-0002 D2 lists the signal tables (atom: defines one concept, ≤ ~15 min / ~2000 words, sub-concepts are vocabulary; thesis: multiple supporting themes, metaphor / argument / multi-authority, ≥ ~15 min / ~2000 words). Edge case: a long deep-dive defining one concept stays atom — content wins over duration.
+Every note declares `Mode: atom | thesis | clip` in frontmatter (per ADR-0002 D8, extended by ADR-0004). The modeler picks atom or thesis; the formatter writes it; `clip-to-zk` sets `clip` itself; `vault-lint` reads it to apply the right required-core check and the right budget rule. ADR-0002 D2 lists the signal tables (atom: defines one concept, ≤ ~15 min / ~2000 words, sub-concepts are vocabulary; thesis: multiple supporting themes, metaphor / argument / multi-authority, ≥ ~15 min / ~2000 words). Edge case: a long deep-dive defining one concept stays atom — content wins over duration.
 
 Authoritative skeleton definitions live in `agents/conceptual-modeler-agent.md` (output) and `agents/obsidian-formatter-agent.md` (assembly). Do not duplicate them here.
 
@@ -72,6 +78,9 @@ Authoritative skeleton definitions live in `agents/conceptual-modeler-agent.md` 
 |---|---|---|
 | atom | `### Definition` / `### Mental Model` / `### Links` | 500-char hard ceiling across body prose |
 | thesis | `### 執行摘要` / `### Mental Model` / ≥ 1 `### <Theme>` chapter / `### Links` | Per-chapter soft target 200–1500 chars; no flat ceiling |
+| clip | `### Links` | None — the body is the source verbatim |
+
+A clip note is a source captured as is, with `### Links` appended (ADR-0004).
 
 Atom-mode optional sections: `### Why It Matters`, `### Boundary`, `### Code`. Thesis-mode optional section: `### 附錄`. Thesis mode does **not** carry `### Boundary` or `### Code` — the thesis bounds the argument structurally, and code-heavy sources should classify as atom.
 
@@ -109,7 +118,7 @@ Agents do not call each other directly. They use the Task tool with `subagent_ty
 
 ## Body budget per mode
 
-The budget rule depends on `Mode:` (per ADR-0002 D5). Both rules share the same calculation method below.
+The budget rule depends on `Mode:` (per ADR-0002 D5). Both rules share the same calculation method below. `Mode: clip` notes are exempt from both: the body is the source verbatim (ADR-0004), and Checks 9 and 11 skip them.
 
 ### Atom mode — 500-character hard ceiling
 

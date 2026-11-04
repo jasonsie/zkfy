@@ -152,7 +152,7 @@ Use the `zk-note` skill to orchestrate the integration:
   3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
   4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
   5. Spinoff candidates — returned in the report only, never written to a file
-  6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay
+  6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay (except `clip-to-zk`, which adopts its own clip and removes the raw copy after verification)
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry

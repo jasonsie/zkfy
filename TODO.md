@@ -83,3 +83,33 @@ Cross-session backlog for features deferred from active refactors.
 - A wikilink target that exists only under `raw/` or any other excluded folder is reported as dangling.
 
 **Reference:** `docs/ADR/0002-hybrid-atom-thesis-mode.md` D9, CLAUDE.md "Vault contract" exclude list.
+
+---
+
+### [feat] clip-to-zk `--refresh`
+
+**Context:** `clip-to-zk` stops when a note in scope already has the same `Link` (dedupe, `docs/plans/clip-to-zk.md` Q16). A page that has changed cannot be re-clipped into its existing clip note.
+
+**Why deferred:** Refreshing means replacing a note's verbatim body, and the note may already carry approved `### Links` and user edits. That needs an old-vs-new body diff design first.
+
+**Acceptance criteria:**
+
+- `--refresh` re-clips a URL whose clip note exists and shows a diff of the old body against the new one before anything is written.
+- Nothing is replaced without user approval; `### Links` and frontmatter the user edited are kept.
+
+**Reference:** `docs/ADR/0004-clip-mode-verbatim-notes.md`, `docs/plans/clip-to-zk.md` Q16.
+
+---
+
+### [feat] clip-to-zk batch
+
+**Context:** `clip-to-zk` takes one source per run (Q17). Clipping a reading list means many runs.
+
+**Why deferred:** One run per source keeps its own questions (domain, folder, adopt of an existing clip) and its own approvals. A batch must not blur them.
+
+**Acceptance criteria:**
+
+- Several sources in one invocation, each processed as its own run with its own questions and approvals.
+- A failure in one source does not stop or undo the others; the report lists each result.
+
+**Reference:** `docs/ADR/0004-clip-mode-verbatim-notes.md`, `docs/plans/clip-to-zk.md` Q17.

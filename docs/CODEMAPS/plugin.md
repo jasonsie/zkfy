@@ -68,7 +68,8 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `zk-note/` | Orchestrates zettelkasten-agent + obsidian-formatter-agent pipeline |
 | `query/` | Read-only vault queries via `vault-knowledge search` / `read` |
 | `vault-index/` | Catalog generation: `.claude/index.md` and related files are produced only by `vault-knowledge build` |
-| `vault-lint/` | 7 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps. Checks 5-7 fixes proposed, applied on user approval |
+| `vault-lint/` | 12 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps (1-7), plus Concept-First / Hybrid Mode / clip-aware conformance (8-12). Fixes for 5-7 and 10 proposed, applied on user approval |
+| `clip-to-zk/` | Files a source verbatim as a `Mode: clip` note (`scripts/clip_note.py` does the exact steps); not part of the 3-stage pipeline |
 | `terminal-colors/` | Standardized ANSI color codes for agent output |
 | `x-learn-study-sop/` | 4-phase study SOP: checkpoint, RAG extraction, parallel impl, commit |
 
@@ -80,6 +81,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `/query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
 | `/vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7, applied on approval] |
 | `/notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
+| `/zkfy:clip-to-zk` | URL, `raw/` clip, file, text, or video | dedupe --> capture --> Discover --> adopt --> `clip_note.py` --> verify --> delete raw copy --> cross-pollinate (proposals) --> lint + build. See `docs/ADR/0004-clip-mode-verbatim-notes.md` |
 
 ## Hooks
 
@@ -100,7 +102,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `raw/` | Target vault | Source drop zone (excluded from queries) |
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
-| `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.1`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html` |
+| `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.1`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html`. `clip-to-zk` also needs `--adopt`, `--release` and undo-adoption (not yet in 2.1) |
 | Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
 
 ## Error Handling

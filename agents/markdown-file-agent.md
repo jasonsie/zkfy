@@ -195,7 +195,7 @@ echo -e "${DIM}  Size: 45 KB | Lines: 892 | Words: 5,234${RESET}"
 
 Every piece of source content MUST appear in the output.
 If content can't be cleanly converted to Markdown, preserve as raw HTML block.
-A web clip is the durable record of the page: downstream phases must never delete it.
+A web clip is the durable record of the page: downstream phases must never delete it (except `clip-to-zk`, which adopts its own clip and removes the raw copy after verification).
 
 ---
 

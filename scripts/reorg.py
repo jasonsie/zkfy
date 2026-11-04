@@ -282,3 +282,322 @@ def survey(corpus, target=None, limits=None):
                        "lines": {p: conceptual[p].line_count for p in members}})
     result.sort(key=lambda c: (-c["score"], -len(c["notes"]), c["notes"]))
     return {"target": target or ".", "thresholds": limits, "notes": len(notes), "signals": signals, "clusters": result}
+
+
+def read_any(root, name):
+    """A mapping, draft or ledger file: absolute, or vault-relative (any folder, symlink-free)."""
+    path = Path(name).expanduser()
+    return path.read_bytes() if path.is_absolute() else k.read_file(root, name)
+
+
+def load_mapping(root, name):
+    try:
+        data = json.loads(read_any(root, name))
+    except (OSError, ValueError) as e:
+        raise k.KnowledgeError(f"Cannot read mapping {name}: {e}") from e
+    if not isinstance(data, dict) or data.get("version") != 1:
+        raise k.KnowledgeError("Mapping must be a JSON object with version 1")
+    data.setdefault("merges", [])
+    data.setdefault("moves", [])
+    ok = isinstance(data["merges"], list) and isinstance(data["moves"], list)
+    ok = ok and all(isinstance(m, dict) and isinstance(m.get("survivor"), str) and isinstance(m.get("absorbed"), list)
+                    and m["absorbed"] and all(isinstance(a, str) for a in m["absorbed"]) for m in data["merges"])
+    ok = ok and all(isinstance(mv, dict) and isinstance(mv.get("from"), str) and isinstance(mv.get("to"), str) for mv in data["moves"])
+    if not ok:
+        raise k.KnowledgeError("Mapping merges need survivor + absorbed[]; moves need from + to")
+    if not data["merges"] and not data["moves"]:
+        raise k.KnowledgeError("Mapping has no operations")
+    return data
+
+
+def text_of(corpus, path):
+    return corpus.snapshot.read(path).decode("utf-8-sig")
+
+
+def dirty_paths(root, paths):
+    """Touched paths with uncommitted edits (modified, staged, or untracked); deleted paths included."""
+    if not paths:
+        return []
+    out = k.git(root, "status", "--porcelain", "-z", "--untracked-files=all", "--", *paths)
+    fields = out.split(b"\0")
+    dirty, i = set(), 0
+    while i < len(fields) and fields[i]:
+        entry = fields[i]
+        status, name = entry[:2].decode(errors="replace"), os.fsdecode(entry[3:])
+        dirty.add(name)
+        if status[0] in "RC":
+            i += 1
+            dirty.add(os.fsdecode(fields[i]))
+        i += 1
+    return sorted(dirty & set(paths))
+
+
+def inline_code_spans(line):
+    return [(m.start(), m.end()) for m in re.finditer(r"`[^`]*`", line)]
+
+
+def plan(corpus, mapping):
+    """Validate a mapping and compute everything apply would do. Read-only."""
+    root, scope, notes = corpus.snapshot.root, corpus.scope, corpus.notes
+    errors, warnings, merges, moves = [], [], [], []
+    used = k.Counter()
+    for m in mapping.get("merges", []):
+        survivor, absorbed = m["survivor"], list(m["absorbed"])
+        if survivor in absorbed:
+            errors.append(f"survivor is also absorbed: {survivor}")
+        for p in (survivor, *absorbed):
+            used[p] += 1
+            if scope.is_map(p):
+                errors.append(f"maps cannot be woven: {p}")
+        rename = m.get("rename")
+        if rename is not None and (not scope.eligible(rename) or rename in notes or (root / rename).exists()):
+            errors.append(f"rename target must be a new eligible path: {rename}")
+        draft = None
+        if not m.get("draft"):
+            errors.append(f"merge into {survivor} needs a draft")
+        else:
+            try:
+                draft = read_any(root, m["draft"]).decode("utf-8-sig")
+            except (OSError, UnicodeDecodeError, k.KnowledgeError) as e:
+                errors.append(f"cannot read draft {m['draft']}: {e}")
+        merges.append({**m, "absorbed": absorbed, "rename": rename, "draft_text": draft})
+    for mv in mapping.get("moves", []):
+        src, dst = mv["from"], mv["to"]
+        used[src] += 1
+        used[dst] += 1
+        if not scope.eligible(dst):
+            errors.append(f"move target is not an eligible path: {dst}")
+        elif dst in notes or (root / dst).exists():
+            errors.append(f"move target exists: {dst}")
+        moves.append((src, dst))
+    for p, count in sorted(used.items()):
+        if count > 1:
+            errors.append(f"path used more than once: {p}")
+    # Already applied? Every absorbed note gone, every survivor equal to its draft, every move done.
+    done = [all(a not in notes for a in m["absorbed"]) and (m["rename"] or m["survivor"]) in notes
+            and m["draft_text"] is not None and text_of(corpus, m["rename"] or m["survivor"]) == m["draft_text"] for m in merges]
+    done += [src not in notes and dst in notes for src, dst in moves]
+    if done and all(done):
+        return {"errors": [], "warnings": [], "applied": True, "operations": [], "link_rewrites": [], "aliases_to_add": {},
+                "touched": [], "dirty": [], "ledger": None, "draft_issues": {}, "markdown": "Already applied; nothing to do.\n"}
+    if any(done):
+        errors.append("mapping is partially applied; restore the tree or finish by hand before retrying")
+    for m in merges:
+        for p in (m["survivor"], *m["absorbed"]):
+            if p not in notes:
+                errors.append(f"not an eligible note: {p}")
+    for src, _ in moves:
+        if src not in notes:
+            errors.append(f"not an eligible note: {src}")
+    if errors:
+        return {"errors": sorted(set(errors)), "warnings": warnings, "applied": False, "operations": [], "link_rewrites": [],
+                "aliases_to_add": {}, "touched": [], "dirty": [], "ledger": None, "draft_issues": {}, "markdown": ""}
+    final = {p: p for p in notes}
+    redirect, anchors, draft_headings = {}, {}, {}
+    for m in merges:
+        if m["rename"]:
+            final[m["survivor"]] = m["rename"]
+        for a in m["absorbed"]:
+            final[a] = None
+            redirect[a] = m["survivor"]
+            anchors[a] = {str(x).casefold(): str(y) for x, y in (m.get("anchors", {}).get(a) or {}).items()}
+        draft_headings[m["survivor"]] = {h.casefold(): h for _, h in k.Note.parse(m["survivor"], m["draft_text"].encode(), scope).headings}
+    for src, dst in moves:
+        final[src] = dst
+    stems = k.defaultdict(list)
+    for p, f in final.items():
+        if f:
+            stems[k.PurePosixPath(f).stem.casefold()].append(f)
+    for stem, paths in sorted(stems.items()):
+        if len(paths) > 1:
+            errors.append(f"duplicate basename after the pass: {stem} ({', '.join(sorted(paths))})")
+    # Draft checks and aliases.
+    draft_issues, aliases_to_add = {}, {}
+    for m in merges:
+        survivor = m["survivor"]
+        note = k.Note.parse(final[survivor], m["draft_text"].encode(), scope)
+        problems = [f"{rule}: {detail}" for rule, detail in note.errors]
+        for field in ("Date", "Type", "Categories"):
+            if field not in note.meta:
+                problems.append(f"field: {field}")
+        headings = {h.casefold() for _, h in note.headings}
+        if note.meta.get("Type") not in ("fleeting", "structure"):
+            if "Mode" in note.meta:
+                warnings.append(f"{survivor}: woven notes take the legacy profile; the draft declares Mode: {note.meta['Mode']}")
+            for required in ("Abstract", "Links"):
+                if required.casefold() not in headings:
+                    problems.append(f"heading: {required}")
+        if problems:
+            draft_issues[survivor] = problems
+        have = {normalize(str(x)).casefold() for x in (note.meta.get("Aliases") or [])} | {k.PurePosixPath(final[survivor]).stem.casefold()}
+        wanted = []
+        for a in m["absorbed"]:
+            wanted.append(k.PurePosixPath(a).stem)
+            wanted.extend(str(x) for x in (notes[a].meta.get("Aliases") or []) if x)
+        missing = sorted({w for w in wanted if normalize(w).casefold() not in have}, key=str.casefold)
+        if missing:
+            aliases_to_add[survivor] = missing
+    for src, dst in moves:
+        old, new_stem = k.PurePosixPath(src).stem, k.PurePosixPath(dst).stem
+        have = {normalize(str(x)).casefold() for x in (notes[src].meta.get("Aliases") or [])}
+        if old.casefold() != new_stem.casefold() and old.casefold() not in have:
+            aliases_to_add[src] = [old]
+    # Link rewrites across every eligible note that remains.
+    rewrites = []
+    for p in sorted(notes):
+        if p in redirect:
+            continue
+        lines = text_of(corpus, p).splitlines()
+        start = body_start(lines)
+        sole = {}
+        for n, line in enumerate(lines, 1):
+            if n > start and LIST.match(line):
+                found = list(k.WIKI.finditer(line))
+                if len(found) == 1:
+                    status, matches = corpus.resolve(found[0][1].split("|", 1)[0].strip().partition("#")[0], p)
+                    if status == "ok":
+                        sole[n] = matches[0]
+        survivors_listed = {t for t in sole.values() if t in {m["survivor"] for m in merges}}
+        fence = None
+        for n, line in enumerate(lines, 1):
+            if n <= start:
+                if not re.match(r"^(Before|Next):", line):
+                    continue
+            else:
+                opened = re.match(r"^\s*(`{3,}|~{3,})", line)
+                if opened:
+                    marker = opened[1]
+                    if fence is None:
+                        fence = marker
+                    elif marker[0] == fence[0] and len(marker) >= len(fence):
+                        fence = None
+                    continue
+                if fence is not None:
+                    continue
+            spans = inline_code_spans(line)
+            new = line
+
+            def outside_code(m):
+                return not any(a <= m.start() < b for a, b in spans)
+
+            for m in list(k.WIKI.finditer(line)):
+                if not outside_code(m):
+                    continue
+                raw = m[1]
+                target_part, _, alias = raw.partition("|")
+                target, _, anchor = target_part.partition("#")
+                target = target.strip()
+                if not target:
+                    continue
+                status, matches = corpus.resolve(target, p)
+                if status != "ok":
+                    continue
+                t = matches[0]
+                new_target = None
+                if t in redirect:
+                    survivor = redirect[t]
+                    new_target = k.PurePosixPath(final[survivor]).stem
+                    if anchor:
+                        if anchor.casefold() in draft_headings[survivor]:
+                            anchor = draft_headings[survivor][anchor.casefold()]
+                        elif anchor.casefold() in anchors[t]:
+                            anchor = anchors[t][anchor.casefold()]
+                        else:
+                            warnings.append(f"{p}:{n}: anchor #{anchor} of {t} has no heading in the woven note; dropped")
+                            anchor = ""
+                elif final[t] != t:
+                    if "/" in target:
+                        new_target = final[t][:-3] if final[t].endswith(".md") else final[t]
+                    elif k.PurePosixPath(final[t]).stem != k.PurePosixPath(t).stem:
+                        new_target = k.PurePosixPath(final[t]).stem
+                if new_target is None:
+                    continue
+                if n <= start:
+                    anchor = ""  # Before/Next fields point at notes, never at sections
+                link = new_target + (f"#{anchor}" if anchor else "") + (f"|{alias}" if alias else "")
+                new = new.replace(m[0], ("!" if m[0].startswith("!") else "") + f"[[{link}]]", 1)
+            if n > start:
+                for m in list(k.MDLINK.finditer(line)):
+                    if not outside_code(m) or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", m[1]) or m[1].startswith("#"):
+                        continue
+                    target, _, anchor = k.unquote(m[1]).partition("#")
+                    joined = os.path.normpath(os.path.join(str(k.PurePosixPath(p).parent), target)).replace(os.sep, "/")
+                    rooted = os.path.normpath(target.lstrip("/")).replace(os.sep, "/")
+                    candidates = [c for base in (joined, rooted) for c in ((base,) if base.endswith(".md") else (base + ".md", base))]
+                    t = next((c for c in candidates if c in notes), None)
+                    if t is None:
+                        continue
+                    destination = final[redirect.get(t, t)]
+                    if destination == t and final[p] == p:
+                        continue  # neither end moves: leave the author's link form alone
+                    # Vault-root paths resolve both in Obsidian and in the structural lint; `../` forms do not lint.
+                    rewritten = destination if target.endswith(".md") else destination[:-3]
+                    rewritten = quote(rewritten, safe="/")
+                    if rewritten != m[1].partition("#")[0]:
+                        new = new.replace(m[0], m[0].replace(m[1], rewritten + (f"#{anchor}" if anchor else ""), 1), 1)
+            if new == line:
+                continue
+            action = "rewrite"
+            if n in sole and sole[n] in redirect and redirect[sole[n]] in survivors_listed:
+                action, new = "drop", ""
+            rewrites.append({"file": p, "line": n, "action": action, "old": line, "new": new})
+    touched = set()
+    for m in merges:
+        touched.update((m["survivor"], *m["absorbed"]))
+        if m["rename"]:
+            touched.add(m["rename"])
+    for src, dst in moves:
+        touched.update((src, dst))
+    touched.update(x["file"] for x in rewrites)
+    touched = sorted(touched)
+    ledger = None
+    if merges:
+        results = []
+        for m in merges:
+            texts = {p: text_of(corpus, p) for p in (m["survivor"], *m["absorbed"])}
+            if not m.get("ledger"):
+                results.append({"survivor": m["survivor"], "ok": False, "problem": "no ledger"})
+                continue
+            try:
+                data = json.loads(read_any(root, m["ledger"]))
+            except (OSError, ValueError, k.KnowledgeError) as e:
+                results.append({"survivor": m["survivor"], "ok": False, "problem": f"cannot read ledger: {e}"})
+                continue
+            check = ledger_check(texts, m["draft_text"], data)
+            results.append({"survivor": m["survivor"], "ok": check["ok"], "counts": check["counts"], "review": len(check["review"]),
+                            "problems": {x: len(check[x]) for x in ("missing", "unknown", "mismatch", "dangling", "invalid") if check[x]}})
+        ledger = {"ok": all(x["ok"] for x in results), "merges": results}
+    operations = [{"op": "weave", "survivor": m["survivor"], "absorbed": m["absorbed"], "rename": m["rename"]} for m in merges]
+    operations += [{"op": "move", "from": src, "to": dst} for src, dst in moves]
+    report = {"errors": sorted(set(errors)), "warnings": warnings, "applied": False, "operations": operations,
+              "link_rewrites": rewrites, "aliases_to_add": aliases_to_add, "touched": touched,
+              "dirty": dirty_paths(root, touched), "ledger": ledger, "draft_issues": draft_issues}
+    report["markdown"] = render(report)
+    return report
+
+
+def render(report):
+    out = ["# Reorganization plan", ""]
+    if report["errors"]:
+        out += ["## Errors", ""] + [f"- {e}" for e in report["errors"]] + [""]
+    out += ["## Operations", "", "| Op | From | To |", "|---|---|---|"]
+    for op in report["operations"]:
+        if op["op"] == "weave":
+            out.append(f"| weave | {', '.join(f'`{a}`' for a in op['absorbed'])} | `{op['rename'] or op['survivor']}` |")
+        else:
+            out.append(f"| move | `{op['from']}` | `{op['to']}` |")
+    out += ["", f"## Link rewrites ({len(report['link_rewrites'])})", ""]
+    for x in report["link_rewrites"]:
+        out.append(f"- `{x['file']}:{x['line']}` {x['action']}: `{x['old'].strip()}`" + (f" → `{x['new'].strip()}`" if x["new"] else ""))
+    if report["aliases_to_add"]:
+        out += ["", "## Aliases to add", ""] + [f"- `{p}`: {', '.join(a)}" for p, a in report["aliases_to_add"].items()]
+    if report["draft_issues"]:
+        out += ["", "## Draft issues", ""] + [f"- `{p}`: {'; '.join(v)}" for p, v in report["draft_issues"].items()]
+    if report["ledger"] is not None:
+        out += ["", "## Ledger", ""] + [f"- `{x['survivor']}`: " + ("ok" if x["ok"] else "NOT ok") + f" {json.dumps({k_: v for k_, v in x.items() if k_ not in ('survivor', 'ok')}, ensure_ascii=False)}" for x in report["ledger"]["merges"]]
+    if report["dirty"]:
+        out += ["", "## Files with uncommitted edits (apply refuses)", ""] + [f"- `{p}`" for p in report["dirty"]]
+    if report["warnings"]:
+        out += ["", "## Warnings", ""] + [f"- {w}" for w in report["warnings"]]
+    out += ["", f"Touched files: {len(report['touched'])}", ""]
+    return "\n".join(out)

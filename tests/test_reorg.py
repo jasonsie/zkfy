@@ -237,6 +237,77 @@ class ReorgTest(unittest.TestCase):
 
     JS = "111.cs/language/javascript/"
 
+    def weave_mapping(self, draft=None, moves=True):
+        """Write the draft and a complete ledger for the This → This-Binding weave; return the mapping."""
+        draft = DRAFT if draft is None else draft
+        this, binding = r.units(THIS), r.units(THIS_BINDING)
+        rows = [{"note": self.JS + "Cs-Javascript-This.md", "unit": this[0]["id"], "status": "reworded", "heading": "Abstract"}]
+        rows += [{"note": self.JS + "Cs-Javascript-This.md", "unit": u["id"], "status": "kept"} for u in this[1:]]
+        rows += [{"note": self.JS + "Cs-Javascript-This-Binding.md", "unit": binding[0]["id"], "status": "reworded", "heading": "Abstract"},
+                 {"note": self.JS + "Cs-Javascript-This-Binding.md", "unit": binding[1]["id"], "status": "duplicate", "of": this[1]["id"]},
+                 {"note": self.JS + "Cs-Javascript-This-Binding.md", "unit": binding[2]["id"], "status": "kept"},
+                 {"note": self.JS + "Cs-Javascript-This-Binding.md", "unit": binding[3]["id"], "status": "kept"}]
+        self.put("docs/plans/reorg/this/draft.md", draft)
+        self.put("docs/plans/reorg/this/ledger.json", json.dumps({"version": 1, "rows": rows}))
+        mapping = {"version": 1, "scope": self.JS.rstrip("/"),
+                   "merges": [{"survivor": self.JS + "Cs-Javascript-This-Binding.md", "absorbed": [self.JS + "Cs-Javascript-This.md"],
+                               "draft": "docs/plans/reorg/this/draft.md", "ledger": "docs/plans/reorg/this/ledger.json"}],
+                   "moves": [{"from": "111.cs/system-design/Cs-System-Design-Relative.md", "to": "111.cs/Cs-System-Design-Relative.md"}] if moves else []}
+        self.put("docs/plans/reorg/this/mapping.json", json.dumps(mapping))
+        return mapping
+
+    def test_plan_lists_every_link_rewrite_and_touched_file(self):
+        self.weave_mapping()
+        report = r.plan(self.corpus(), r.load_mapping(self.root, "docs/plans/reorg/this/mapping.json"))
+        self.assertEqual(report["errors"], [])
+        self.assertFalse(report["applied"])
+        self.assertEqual(report["ledger"]["ok"], True)
+        scope, web_map, relative = self.JS + "Cs-Javascript-Scope.md", "000.Index/Web-Map.md", "111.cs/system-design/Cs-System-Design-Relative.md"
+        rewrites = {(x["file"], x["line"], x["action"], x["new"]) for x in report["link_rewrites"]}
+        self.assertEqual(rewrites, {
+            (scope, 7, "rewrite", "Next: '[[Cs-Javascript-This-Binding]]'"),
+            (scope, 12, "rewrite", "See [[Cs-Javascript-This-Binding#Five Binding Rules]] for the receiver."),
+            (scope, 13, "rewrite", "Also [[Cs-Javascript-This-Binding|the this note]] and ![[Cs-Javascript-This-Binding]]."),
+            (scope, 15, "rewrite", "- [[Cs-Javascript-This-Binding]] - the receiver"),
+            (web_map, 5, "drop", ""),
+            (relative, 10, "rewrite", "See [the this note](111.cs/language/javascript/Cs-Javascript-This-Binding.md) and [scope](111.cs/language/javascript/Cs-Javascript-Scope.md)."),
+        })
+        self.assertEqual(report["aliases_to_add"], {})
+        self.assertEqual(report["touched"], sorted([web_map, "111.cs/Cs-System-Design-Relative.md", scope, self.JS + "Cs-Javascript-This-Binding.md",
+                                                    self.JS + "Cs-Javascript-This.md", relative]))
+        self.assertEqual(report["dirty"], [])
+        self.assertIn("Cs-Javascript-This-Binding", report["markdown"])
+
+        bare = DRAFT.replace("Aliases: [this keyword, this binding, Cs-Javascript-This]", "Aliases: [this binding]")
+        self.weave_mapping(draft=bare)
+        report = r.plan(self.corpus(), r.load_mapping(self.root, "docs/plans/reorg/this/mapping.json"))
+        self.assertEqual(report["aliases_to_add"], {self.JS + "Cs-Javascript-This-Binding.md": ["Cs-Javascript-This", "this keyword"]})
+
+        self.put(scope, SCOPE + "\nunsaved edit\n")
+        report = r.plan(self.corpus(), r.load_mapping(self.root, "docs/plans/reorg/this/mapping.json"))
+        self.assertEqual(report["dirty"], [scope])
+
+    def test_plan_rejects_invalid_mappings_without_raising(self):
+        self.weave_mapping()
+        base = r.load_mapping(self.root, "docs/plans/reorg/this/mapping.json")
+
+        def errors(**changes):
+            mapping = json.loads(json.dumps(base))
+            for key, value in changes.items():
+                mapping[key] = value
+            return " | ".join(r.plan(self.corpus(), mapping)["errors"])
+
+        merge = base["merges"][0]
+        self.assertIn("not an eligible note", errors(merges=[{**merge, "absorbed": [self.JS + "Cs-Javascript-Missing.md"]}]))
+        self.assertIn("move target exists", errors(moves=[{"from": "111.cs/system-design/Cs-System-Design-Relative.md", "to": self.JS + "Cs-Javascript-Scope.md"}]))
+        self.assertIn("used more than once", errors(merges=[merge, {**merge, "absorbed": [self.JS + "Cs-Javascript-Scope.md"]}]))
+        self.assertIn("duplicate basename", errors(moves=[{"from": "111.cs/system-design/Cs-System-Design-Relative.md", "to": "222.web/Cs-Javascript-Scope.md"}]))
+        self.assertIn("maps cannot be woven", errors(merges=[{**merge, "absorbed": ["000.Index/Web-Map.md"]}]))
+        self.assertIn("needs a draft", errors(merges=[{key: value for key, value in merge.items() if key != "draft"}]))
+        self.assertIn("rename target", errors(merges=[{**merge, "rename": self.JS + "Cs-Javascript-Scope.md"}]))
+        with self.assertRaises(k.KnowledgeError):
+            r.load_mapping(self.root, "docs/plans/reorg/this/ledger.json")
+
     def test_survey_clusters_are_cliques_ranked_by_strength_not_chains(self):
         # A–B share "cache"; B–C share "strategy"; A–C share nothing: two pairs, never one chain of three.
         self.put("222.web/Web-Cache-Policy.md", simple("Cache policy"))

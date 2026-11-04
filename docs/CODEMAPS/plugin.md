@@ -54,7 +54,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | Agent | Model | Purpose | Key I/O |
 |-------|-------|---------|---------|
 | `video-agent` | default | Extract video transcripts | URL --> transcript markdown |
-| `markdown-file-agent` | default | Capture + convert to markdown | URL --> `raw/<Page Title>.md` via the global `web-clipper` skill; text/transcript --> `raw/src-*.md` |
+| `markdown-file-agent` | default | Capture + convert to markdown | URL --> `raw/<Page Title>.md` via the `web-clipper` plugin; text/transcript --> `raw/src-*.md` |
 | `diagram-agent` | default | Mermaid diagrams for Obsidian | concept --> mermaid code block |
 | `ascii-diagram-agent` | default | ASCII diagrams for plain-text | concept --> ASCII art |
 | `zettelkasten-agent` | Opus | Deep content analysis | source markdown --> analysis (concept, domain, metadata, links) |
@@ -100,7 +100,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `raw/` | Target vault | Source drop zone (excluded from queries) |
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
-| `web-clipper` skill | `~/.claude/skills/web-clipper/` (ai_dotfiles) | URL sources; exit 2 means save the page from a browser and rerun with `--html` |
+| `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.1`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html` |
 | Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
 
 ## Error Handling

@@ -3,7 +3,7 @@ description: "Extract content from URLs, text, or transcripts and produce struct
 whenToUse: "Use when raw content (URL, text, file, video transcript) needs to be converted into a clean, structured Markdown file"
 capabilities:
   - Detect source type (URL, file path, video transcript, raw text)
-  - Clip web pages with the global `web-clipper` skill (full page, Web Clipper frontmatter, images and graphs localized)
+  - Clip web pages with the `web-clipper` plugin (full page, Web Clipper frontmatter, images and graphs localized)
   - Convert text and transcripts to Markdown (headings, code blocks, tables, images, links)
   - Preserve SVG as fenced code blocks
   - Verify output quality (zero data loss policy)
@@ -17,7 +17,7 @@ color: green
 mode: best-effort
 externalDependencies:
   - "~/.claude/prompts/crawler.prompt.md"
-  - "~/.claude/skills/web-clipper/scripts/clip.py"
+  - "web-clipper plugin (command: web-clipper)"
 ---
 
 # Markdown File Generator Agent
@@ -28,8 +28,8 @@ You are a content extraction and Markdown conversion specialist. Take a source
 (URL, text, or video transcript) and produce a complete Markdown file with
 **zero data loss**.
 
-Web URLs are never fetched by hand: the global `web-clipper` skill (installed from
-`ai_dotfiles` at `~/.claude/skills/web-clipper/`) captures the page the way Obsidian Web
+Web URLs are never fetched by hand: the `web-clipper` plugin (a zkfy dependency; its
+`web-clipper` command) captures the page the way Obsidian Web
 Clipper does and stores its images locally. There is no WebFetch or scraping-service fallback.
 
 ---
@@ -104,7 +104,7 @@ echo -e "${BLUE}${BOLD}[3/6] Extracting content...${RESET}"
 script writes the note itself):
 
 ```bash
-python3 ~/.claude/skills/web-clipper/scripts/clip.py "<url>" --out "<output_dir>" --json
+web-clipper "<url>" --out "<output_dir>" --json
 ```
 
 Read the JSON line on stdout (`note`, `assets`, `warnings`) and act on the exit code:
@@ -115,7 +115,7 @@ Read the JSON line on stdout (`note`, `assets`, `warnings`) and act on the exit 
 | `5` | Clip written, some images left remote | Continue; repeat every warning to the user |
 | `3` | A clip of this page already exists | Reuse the existing file (report its path); rerun with `--force` only if the user asked for a refresh |
 | `2` | Limitation hit: bot challenge, login wall, paywall, or a page that renders nothing headlessly | **Stop.** Ask the user to open the page in their browser, save the rendered page (Save Page As → "Webpage, HTML Only", or copy `document.documentElement.outerHTML` into a file outside `raw/`), then rerun with `--html <file>`. Never substitute WebFetch or another scraper. |
-| `1` | Prerequisites missing (Node 21+, built `obsidian-clipper` CLI, Python Playwright) | Show the message; it names the fix. See `~/.claude/skills/web-clipper/SKILL.md` |
+| `1` | Prerequisites missing (Node 21+, built `obsidian-clipper` CLI, Python Playwright) | Show the message; it names the fix. See `/web-clipper:web-clipper` |
 | `4` | Conversion failed | Report the message; retry once with `--keep-html` so the HTML can be inspected |
 
 ```bash
@@ -206,7 +206,7 @@ A web clip is the durable record of the page: downstream phases must never delet
 | Prompt not found | Warn and proceed with default formatting | `echo -e "${YELLOW}⚠${RESET} crawler.prompt.md not found\n${DIM}  Using default formatting rules${RESET}"` |
 | Unrecognized source type | Abort — cannot determine extraction method | `echo -e "${RED}✗ ABORT:${RESET} Cannot determine source type\n${DIM}  Provide a URL, file path, or raw text${RESET}"` |
 | Clipper exit 2 (blocked, login, paywall) | Stop; ask the user for the page HTML and rerun with `--html` | `echo -e "${YELLOW}⚠${RESET} Page cannot be fetched headlessly\n${DIM}  Save it from your browser and rerun with --html <file>${RESET}"` |
-| Clipper exit 1 (prerequisites) | Abort; show the message from the script | `echo -e "${RED}✗ ABORT:${RESET} web-clipper prerequisites missing\n${DIM}  See ~/.claude/skills/web-clipper/SKILL.md${RESET}"` |
+| Clipper exit 1 (prerequisites) | Abort; show the message from the script | `echo -e "${RED}✗ ABORT:${RESET} web-clipper prerequisites missing\n${DIM}  See /web-clipper:web-clipper${RESET}"` |
 | Clipper exit 5 (some images remote) | Continue; list the warnings | `echo -e "${YELLOW}⚠${RESET} 2 images left remote\n${DIM}  <urls>${RESET}"` |
 | Empty content after extraction | Abort — nothing to convert | `echo -e "${RED}✗ ABORT:${RESET} No content extracted\n${DIM}  Source returned empty response${RESET}"` |
 | Malformed HTML | Preserve as raw HTML block, warn | `echo -e "${YELLOW}⚠${RESET} Malformed HTML detected\n${DIM}  Preserving as raw HTML block${RESET}"` |

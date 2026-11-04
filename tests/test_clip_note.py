@@ -141,6 +141,15 @@ class FormatTest(unittest.TestCase):
         self.assertEqual((self.root / "raw/深入理解 Postgres 索引.md").read_bytes(), raw_before)
         self.assertEqual(k.Corpus(k.Snapshot(self.root)).issues(), [])
 
+    def test_absolute_paths_inside_the_vault_are_accepted(self):
+        # web-clipper's --json reports absolute paths; clip_note takes them as they come.
+        code, out = self.fmt(source=str(self.root / "111.cs/database/CS-Postgres-Index-Internals.md"),
+                             dest=str(self.root / "111.cs/database/CS-Postgres-Index-Internals.md"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["note"], "111.cs/database/CS-Postgres-Index-Internals.md")
+        outside = Path(self.tmp.name).parent / "CS-Elsewhere.md"
+        self.assertEqual(self.fmt(dest=str(outside))[0], 1)
+
     def test_dry_run_writes_nothing(self):
         before = self.note()
         code, out = self.fmt("--dry-run")

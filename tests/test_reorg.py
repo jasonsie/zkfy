@@ -201,7 +201,59 @@ class ReorgTest(unittest.TestCase):
         self.assertEqual(len(dangling["dangling"]), 1)
         self.assertFalse(dangling["ok"])
 
+    def test_survey_reports_signals_and_candidate_clusters(self):
+        self.put("111.cs/lonely/Cs-Lonely-Note.md", simple("Alone in a folder"))
+        self.put("111.cs/database/postgres/sql/Database-Postgres-Querying.md", simple("Deep and misprefixed"))
+        self.put("222.web/Web-Fetch.md", simple("Fetch", extra="Aliases: [HTTP client]\n").replace("Aliases: []\n", ""))
+        self.put("222.web/Web-Http-Client.md", simple("HTTP client", extra="Aliases: [http client, XHR]\n").replace("Aliases: []\n", ""))
+        self.put("222.web/Web-Long.md", simple("Long", body="\n".join(f"Line {i}." for i in range(130))))
+        report = r.survey(self.corpus())
+        s = report["signals"]
+        self.assertEqual(s["tiny_folders"], [{"folder": "111.cs/database/postgres/sql", "notes": 1},
+                                             {"folder": "111.cs/lonely", "notes": 1},
+                                             {"folder": "111.cs/system-design", "notes": 1}])
+        self.assertEqual(s["deep_paths"], ["111.cs/database/postgres/sql/Database-Postgres-Querying.md"])
+        self.assertEqual(s["prefix_mismatch"], ["111.cs/database/postgres/sql/Database-Postgres-Querying.md"])
+        self.assertEqual(s["nav_leftovers"], ["111.cs/language/javascript/Cs-Javascript-Scope.md"])
+        self.assertEqual(s["oversized"], [])
+        clusters = [c["notes"] for c in report["clusters"]]
+        self.assertEqual(clusters, [["111.cs/language/javascript/Cs-Javascript-This-Binding.md",
+                                     "111.cs/language/javascript/Cs-Javascript-This.md"],
+                                    ["222.web/Web-Fetch.md", "222.web/Web-Http-Client.md"]])
+        reasons = " | ".join(report["clusters"][0]["reasons"])
+        self.assertIn("name stem", reasons)
+        self.assertIn("Five Binding Rules", reasons)
+        self.assertIn("alias", " | ".join(report["clusters"][1]["reasons"]))
+        # The core treats `../` Markdown links as outside references, so only Scope and the map count.
+        self.assertEqual(report["clusters"][0]["inbound"]["111.cs/language/javascript/Cs-Javascript-This.md"], 2)
+
+        web_only = r.survey(self.corpus(), target="222.web")
+        self.assertEqual([c["notes"] for c in web_only["clusters"]], [["222.web/Web-Fetch.md", "222.web/Web-Http-Client.md"]])
+        self.assertEqual(web_only["signals"]["nav_leftovers"], [])
+
+        self.config["reorg"] = {"oversized_lines": 100}
+        self.put(k.POLICY, json.dumps(self.config))
+        self.assertEqual(r.survey(self.corpus())["signals"]["oversized"], [{"path": "222.web/Web-Long.md", "lines": 141}])
+
     JS = "111.cs/language/javascript/"
+
+    def test_survey_clusters_are_cliques_ranked_by_strength_not_chains(self):
+        # A–B share "cache"; B–C share "strategy"; A–C share nothing: two pairs, never one chain of three.
+        self.put("222.web/Web-Cache-Policy.md", simple("Cache policy"))
+        self.put("222.web/Web-Cache-Strategy.md", simple("Cache strategy", body="#### Eviction\nLRU.", extra="Aliases: [快取策略]\n").replace("Aliases: []\n", ""))
+        self.put("222.web/Web-Strategy-Pattern.md", simple("Strategy pattern"))
+        self.put("222.web/Web-Caching.md", simple("Caching", body="#### Eviction\nLFU.", extra="Aliases: [快取策略]\n").replace("Aliases: []\n", ""))
+        self.put("222.web/Web-Security-And-Auth.md", simple("Security and auth"))
+        self.put("222.web/Web-Logging-And-Metrics.md", simple("Logging and metrics"))
+        self.put("222.web/Web-Fetch.md", simple("Fetch", extra="Aliases: [HTTP client]\n").replace("Aliases: []\n", ""))
+        self.put("222.web/Web-Http-Client.md", simple("HTTP client", extra="Aliases: [http client]\n").replace("Aliases: []\n", ""))
+        clusters = r.survey(self.corpus(), target="222.web")["clusters"]
+        notes = [c["notes"] for c in clusters]
+        self.assertNotIn(["222.web/Web-Cache-Policy.md", "222.web/Web-Cache-Strategy.md", "222.web/Web-Strategy-Pattern.md"], notes)
+        self.assertNotIn(["222.web/Web-Logging-And-Metrics.md", "222.web/Web-Security-And-Auth.md"], notes)
+        self.assertEqual(notes[0], ["222.web/Web-Cache-Strategy.md", "222.web/Web-Caching.md"])  # shared alias ranks first
+        self.assertGreater(clusters[0]["score"], clusters[-1]["score"])
+        self.assertTrue(all(len(c["notes"]) == 2 for c in clusters))
 
 
 DRAFT = """---

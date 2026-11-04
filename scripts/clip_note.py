@@ -220,10 +220,17 @@ def corpus_with(root, dest=None, data=None):
     return K.Corpus(snap)
 
 
+def recorded_urls(meta):
+    """The source URLs a note records: Link (clip and video notes) and http(s) URLs in Src (distilled web
+    notes; one Src may list several, e.g. `a; b`). `[[raw/…]]` wikilinks are not URLs and never match."""
+    values = [v for v in (meta.get("Link"), meta.get("Src")) if isinstance(v, str)]
+    return [normalize_url(u) for v in values for u in re.findall(r"https?://[^\s;,'\"<>]+", v, re.I)]
+
+
 def link_matches(corpus, url, skip=()):
     want = normalize_url(url)
     return [{"path": p, "mode": n.meta.get("Mode", "legacy")} for p, n in sorted(corpus.notes.items())
-            if p not in skip and n.meta.get("Link") and normalize_url(n.meta["Link"]) == want]
+            if p not in skip and want in recorded_urls(n.meta)]
 
 
 def check_dest(root, scope, dest, source):

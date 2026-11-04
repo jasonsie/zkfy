@@ -171,6 +171,18 @@ class FormatTest(unittest.TestCase):
         self.assertEqual(self.fmt()[0], 3)
         self.assertEqual(self.run_cli("find-link", "https://neon.com/other")[0], 0)
 
+    def test_duplicate_check_reads_url_src_of_distilled_notes(self):
+        # obsidian-formatter-agent records a web source in Src, not Link; raw/ wikilinks are not URLs.
+        self.put("111.cs/CS-Distilled.md", "---\nDate: 2026-01-01\nType: literature\nMode: atom\nCategories: [CS]\n"
+                 "Src: 'https://neon.com/postgresql/index'\n---\n### Definition\nx\n### Mental Model\ny\n### Links\n")
+        self.put("111.cs/CS-Raw-Src.md", "---\nDate: 2026-01-01\nType: literature\nCategories: [CS]\n"
+                 "Src: '[[raw/src-file]]'\n---\n### Abstract\nx\n### Links\n")
+        code, out = self.run_cli("find-link", "https://neon.com/postgresql/index")
+        self.assertEqual((code, out["matches"]), (3, [{"path": "111.cs/CS-Distilled.md", "mode": "atom"}]))
+        self.put("111.cs/CS-Distilled.md", (self.root / "111.cs/CS-Distilled.md").read_text(encoding="utf-8").replace(
+            "Src: 'https://neon.com/postgresql/index'", "Src: 'https://a.example/x; https://neon.com/postgresql/index/'"))
+        self.assertEqual(self.run_cli("find-link", "https://neon.com/postgresql/index")[0], 3)
+
     def test_destination_rules(self):
         new = "111.cs/database/CS-Brand-New.md"
         self.assertEqual(self.fmt(dest="111.cs/CS-Harness.md")[0], 3)            # exists, not the source

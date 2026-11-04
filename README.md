@@ -108,6 +108,10 @@ ln -s "$PWD" ~/.claude/plugins/zkfy
 mkdir -p ~/.claude/prompts
 touch ~/.claude/prompts/crawler.prompt.md
 touch ~/.claude/prompts/obsidian-note.prompt.md
+
+# Bind the shared CLI to your vault: writes ~/.config/zkfy/knowledge.json and
+# links ~/.local/bin/vault-knowledge (idempotent; --dry-run, --uninstall)
+python3 scripts/install-launcher.py --vault /path/to/your/vault
 ```
 
 ### Configure Prompts
@@ -330,7 +334,9 @@ zkfy/
 │   └── terminal-colors/         # Standardized output formatting
 ├── scripts/
 │   ├── knowledge.py             # Scoped vault CLI: search, read, build, lint, reorg
-│   └── reorg.py                 # Reorganization subcommands: survey, units, plan, ledger, apply
+│   ├── reorg.py                 # Reorganization subcommands: survey, units, plan, ledger, apply
+│   ├── knowledge-launcher.py    # ~/.local/bin/vault-knowledge target; reads the machine-local binding
+│   └── install-launcher.py      # Writes the binding and the link
 └── hooks/
     ├── hooks.json               # Event-based automation
     └── validate-zk-structure.sh # Hook validation script

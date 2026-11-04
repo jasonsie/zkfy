@@ -103,6 +103,8 @@ Q9 says `raw/` is deleted only after zkfy has verified and linted the new note, 
 
 zkfy runs `--release` in step 7 of the flow. This requirement goes to the web-clipper session.
 
+A third command undoes an adoption (removes the adopted note and renamed images, leaves the `raw/` clip): zkfy needs it when `clip_note.py format` exits 2 after `--adopt`, so the staged copy goes away as Q9 requires. Until it exists, the skill stops and reports both paths, deleting nothing.
+
 ## Environment notes (2026-11-04)
 
 - The `vault-knowledge` launcher and its binding (`~/.local/bin/vault-knowledge`, `~/.config/zkfy/knowledge.json`) are missing on this machine. Until they exist, the skill runs `python3 <plugin>/scripts/knowledge.py --vault <root>` with the `--vault` override (Q18).

@@ -1,20 +1,14 @@
 """Run: python3 -B -m unittest discover -s tests -p 'test_reorg.py' -v"""
-
 import importlib.util
-
 import json
-
 import os
-
 from pathlib import Path
-
 import sys
-
 import tempfile
-
 import unittest
 
 SCRIPTS = Path(__file__).parents[1] / "scripts"
+
 
 def load(name):
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
@@ -26,7 +20,6 @@ def load(name):
 
 
 k = sys.modules.get("knowledge") or load("knowledge")
-
 r = load("reorg")
 
 THIS = """---
@@ -122,6 +115,7 @@ See [the this note](../language/javascript/Cs-Javascript-This.md) and [scope](..
 - [[Cs-Javascript-Scope]]
 """
 
+
 def simple(title, body="Body.", categories="[CS]", extra=""):
     return f"---\nDate: 2026-01-01\nType: literature\nCategories: {categories}\nAliases: []\n{extra}---\n### Abstract\n{title}.\n### Content\n{body}\n### Links\n- [[Cs-Javascript-Scope]]\n"
 
@@ -160,6 +154,7 @@ class ReorgTest(unittest.TestCase):
     def corpus(self):
         return k.Corpus(k.Snapshot(self.root, "worktree"))
 
+    # Seam: units — a note body split into the pieces the ledger tracks.
     def test_units_split_paragraphs_lists_tables_code_and_links(self):
         units = r.units(THIS)
         kinds = [u["kind"] for u in units]
@@ -171,6 +166,7 @@ class ReorgTest(unittest.TestCase):
         self.assertEqual(units[0]["line"], 10)
         self.assertEqual(len({u["id"] for u in units}), len(units))
 
+    # Seam: ledger — the preservation check over a cluster, a woven draft and the ledger rows.
     def test_ledger_check_requires_a_row_per_unit_and_verifies_kept_text(self):
         this, binding = r.units(THIS), r.units(THIS_BINDING)
         texts = {"a/Cs-Javascript-This.md": THIS, "a/Cs-Javascript-This-Binding.md": THIS_BINDING}
@@ -201,6 +197,7 @@ class ReorgTest(unittest.TestCase):
         self.assertEqual(len(dangling["dangling"]), 1)
         self.assertFalse(dangling["ok"])
 
+    # Seam: survey — deterministic signals and candidate clusters over the eligible corpus.
     def test_survey_reports_signals_and_candidate_clusters(self):
         self.put("111.cs/lonely/Cs-Lonely-Note.md", simple("Alone in a folder"))
         self.put("111.cs/database/postgres/sql/Database-Postgres-Querying.md", simple("Deep and misprefixed"))
@@ -256,6 +253,7 @@ class ReorgTest(unittest.TestCase):
         self.put("docs/plans/reorg/this/mapping.json", json.dumps(mapping))
         return mapping
 
+    # Seam: plan — a mapping becomes a dry-run report: operations, every link rewrite, aliases, dirty files.
     def test_plan_lists_every_link_rewrite_and_touched_file(self):
         self.weave_mapping()
         report = r.plan(self.corpus(), r.load_mapping(self.root, "docs/plans/reorg/this/mapping.json"))
@@ -308,6 +306,7 @@ class ReorgTest(unittest.TestCase):
         with self.assertRaises(k.KnowledgeError):
             r.load_mapping(self.root, "docs/plans/reorg/this/ledger.json")
 
+    # Seam: apply — the mapping is performed, the catalog rebuilt, exactly the touched files staged.
     def test_apply_weaves_moves_rebuilds_and_stages_only_its_own_files(self):
         self.put("222.web/Web-Unrelated.md", simple("Unrelated pending work") + "\nhalf-written paragraph\n")
         self.put("222.web/Web-Untracked.md", simple("Untracked"))
@@ -394,6 +393,47 @@ class ReorgTest(unittest.TestCase):
         self.assertIn("[[Cs-Lonely#Content|the content]]", self.read("111.cs/Cs-Pointer.md"))
         self.assertEqual(self.corpus().issues(), [])
 
+    # Seam: the CLI — knowledge.py dispatches `reorg` subcommands with lint-style exit codes.
+    def test_cli_reorg_subcommands_and_exit_codes(self):
+        import subprocess
+
+        def cli(*args):
+            p = subprocess.run([sys.executable, "-B", str(SCRIPTS / "knowledge.py"), "--vault", str(self.root), "reorg", *args],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return p.returncode, p.stdout.decode("utf-8"), p.stderr.decode("utf-8")
+
+        self.weave_mapping()
+        code, out, err = cli("survey", "--target", "111.cs")
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(len(json.loads(out)["clusters"]), 1)
+        code, out, _ = cli("units", self.JS + "Cs-Javascript-This.md")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["units"][2]["kind"], "list")
+        code, out, _ = cli("plan", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(json.loads(out)["operations"]), 2)
+        code, out, _ = cli("plan", "docs/plans/reorg/this/mapping.json", "--markdown")
+        self.assertTrue(out.startswith("# Reorganization plan"))
+        code, out, _ = cli("ledger", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(out)["ok"])
+        self.put(self.JS + "Cs-Javascript-Scope.md", SCOPE + "\nunsaved edit\n")
+        code, out, _ = cli("plan", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual(code, 1)
+        code, out, err = cli("apply", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual(code, 2)
+        self.assertIn("Uncommitted edits", err)
+        self.git("checkout", "--", self.JS + "Cs-Javascript-Scope.md")
+        code, out, err = cli("apply", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual((code, err), (0, ""))
+        self.assertTrue(json.loads(out)["changed"])
+        code, out, _ = cli("plan", "docs/plans/reorg/this/mapping.json")
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(out)["applied"])
+        code, _, err = cli("plan", "docs/plans/reorg/this/ledger.json")
+        self.assertEqual(code, 2)
+        self.assertIn("no operations", err)
+
 
 DRAFT = """---
 Date: 2026-11-04
@@ -427,6 +467,7 @@ What does `this` refer to inside an arrow function?
 ### Links
 - [[Cs-Javascript-Scope]] - scope decides variables, this decides the receiver
 """
+
 
 if __name__ == "__main__":
     unittest.main()

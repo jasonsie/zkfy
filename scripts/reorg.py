@@ -1,22 +1,17 @@
+#!/usr/bin/env python3
 """Reorganization passes for a scoped vault: survey, units, plan, ledger, apply.
 
 Shares scope, parsing and link resolution with knowledge.py. A pass is one reviewed mapping;
 a merge is a weave gated by a unit ledger. Nothing here commits; apply stages its own files.
 See docs/ADR/0005-reorganization-as-reviewed-weave.md.
 """
-
 from __future__ import annotations
 
 import json
-
 import os
-
 from pathlib import Path
-
 import re
-
 import sys
-
 from urllib.parse import quote
 
 if "knowledge" in sys.modules:
@@ -26,10 +21,9 @@ else:  # standalone use: python3 scripts/reorg.py
     import knowledge as k
 
 LIST = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
-
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
-
 RULE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+
 
 def normalize(text: str) -> str:
     return " ".join(text.split())
@@ -163,14 +157,12 @@ def ledger_check(texts, draft, ledger):
 
 
 THRESHOLDS = {"tiny_folder_max": 2, "max_depth": 3, "oversized_lines": 1200, "category_share": 0.2, "category_min": 4}
-
 GENERIC = set("introduction intro overview basics basic fundamentals guide notes note concepts concept advanced "
               "practice problems questions cheatsheet summary part chapter implementation usage "
               "and or vs the of in to for with on by from how what why is are".split())
-
 WEIGHT = {"alias": 3, "headings": 2, "subset": 2, "stem": 1}
-
 STRUCTURAL = {"abstract", "content", "links", "mental model", "執行摘要", "executive summary", "附錄", "appendix", "definition"}
+
 
 def thresholds(scope):
     custom = scope.config.get("reorg", {})
@@ -334,6 +326,7 @@ def dirty_paths(root, paths):
 
 def inline_code_spans(line):
     return [(m.start(), m.end()) for m in re.finditer(r"`[^`]*`", line)]
+
 
 
 def plan(corpus, mapping):
@@ -696,6 +689,43 @@ def apply(corpus, mapping, allow_dirty=False):
     return {**report, "applied": True, "changed": True, "written": sorted(writes), "deleted": sorted(deletes),
             "moved": [{"from": a, "to": b} for a, b in moves], "staged": staged, "notes": len(rebuilt.notes),
             "commit_message": commit_message(mapping, report)}
+
+
+def run(corpus, args):
+    """CLI dispatch for `knowledge.py --vault V reorg <command>`; returns (report, exit code)."""
+    root = corpus.snapshot.root
+    command = args.reorg_command
+    if command == "survey":
+        return survey(corpus, args.target), 0
+    if command == "units":
+        name = k.relative(args.path)
+        if name not in corpus.notes:
+            raise k.KnowledgeError("No eligible note at that exact relative path")
+        return {"path": name, "units": units(text_of(corpus, name))}, 0
+    mapping = load_mapping(root, args.mapping)
+    if command == "plan":
+        report = plan(corpus, mapping)
+        blocked = bool(report["errors"] or report["draft_issues"] or report["dirty"]) or (report["ledger"] is not None and not report["ledger"]["ok"])
+        return report, int(blocked and not report["applied"])
+    if command == "ledger":
+        results = []
+        for m in mapping.get("merges", []):
+            texts = {p: text_of(corpus, p) for p in (m["survivor"], *m["absorbed"]) if p in corpus.notes}
+            missing = [p for p in (m["survivor"], *m["absorbed"]) if p not in corpus.notes]
+            if missing or not m.get("draft") or not m.get("ledger"):
+                results.append({"survivor": m["survivor"], "ok": False, "problem": f"missing notes {missing}" if missing else "merge needs draft and ledger"})
+                continue
+            try:
+                draft = read_any(root, m["draft"]).decode("utf-8-sig")
+                data = json.loads(read_any(root, m["ledger"]))
+            except (OSError, ValueError, UnicodeDecodeError, k.KnowledgeError) as e:
+                results.append({"survivor": m["survivor"], "ok": False, "problem": str(e)})
+                continue
+            results.append({"survivor": m["survivor"], **ledger_check(texts, draft, data)})
+        return {"ok": all(x["ok"] for x in results), "merges": results}, int(not all(x["ok"] for x in results))
+    if command == "apply":
+        return apply(corpus, mapping, allow_dirty=args.allow_dirty), 0
+    raise k.KnowledgeError(f"Unknown reorg command {command!r}")
 
 
 def render(report):

@@ -835,6 +835,20 @@ def parser():
     b.add_argument("--write", action="store_true")
     h = sub.add_parser("hook", help="Validate the staged snapshot")
     h.add_argument("--mode", choices=("report-only", "ratchet"), default="report-only")
+    rg = sub.add_parser("reorg", help="Reorganization passes (reorg.py): survey, units, plan, ledger, apply")
+    rsub = rg.add_subparsers(dest="reorg_command", required=True)
+    s = rsub.add_parser("survey", help="Read-only signals and candidate clusters")
+    s.add_argument("--target", default=".", help="Eligible relative directory, or . for the configured corpus")
+    u = rsub.add_parser("units", help="Content units of one eligible note, for building a ledger")
+    u.add_argument("path")
+    pl = rsub.add_parser("plan", help="Validate a mapping and report everything apply would do")
+    pl.add_argument("mapping")
+    pl.add_argument("--markdown", action="store_true", help="Print the human-readable report instead of JSON")
+    ld = rsub.add_parser("ledger", help="Preservation check for every merge in a mapping")
+    ld.add_argument("mapping")
+    ap = rsub.add_parser("apply", help="Apply a mapping, rebuild the catalog, stage the touched files; never commits")
+    ap.add_argument("mapping")
+    ap.add_argument("--allow-dirty", action="store_true", help="Proceed although touched files have uncommitted edits")
     return p
 
 
@@ -870,6 +884,13 @@ def main(argv=None):
                 differences = write_outputs(snap, corpus.outputs(), args.check)
                 report = {"differences": differences, "check": args.check, "notes": len(corpus.notes)}
                 code = args.check and bool(differences)
+            elif args.command == "reorg":
+                sys.modules.setdefault("knowledge", sys.modules[__name__])
+                import reorg
+                report, code = reorg.run(corpus, args)
+                if getattr(args, "markdown", False):
+                    sys.stdout.write(report["markdown"])
+                    return int(code)
         sys.stdout.buffer.write(encoded(report))
         return int(code)
     except (KnowledgeError, OSError, ValueError, KeyError, TypeError) as e:

@@ -33,7 +33,7 @@ Two prompt files must exist outside this repo or the relevant agents abort:
 - `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
 - `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
 
-Agents reference each other via `~/.claude/agents/<name>.md` at runtime. Those paths only resolve once the plugin is installed (symlinked from this repo), so reading the files directly during development means using the in-repo `agents/` path instead.
+Skills and commands reference agent files as `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the plugin's install directory in skill and command markdown. It does not substitute in agent files, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
 
 ## Vault contract
 
@@ -100,7 +100,7 @@ New notes get `Before: ''` and `Next: ''`. Neighbor navigation is not rewired au
 ## Agent delegation pattern
 
 <important if="writing or modifying an agent">
-Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read `~/.claude/agents/<name>.md`. The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
+Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read the agent file (`${CLAUDE_PLUGIN_ROOT}/agents/<name>.md` in skills and commands; the sibling `agents/<name>.md` path in agent files). The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
 </important>
 
 ## Error handling decisions (not negotiable)

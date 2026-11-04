@@ -56,3 +56,17 @@ _Avoid_: line, chunk, section
 **Preservation check**:
 The gate before an absorbed note is deleted: every unit of it has a ledger row (kept, reworded, duplicate of, dropped), every kept row matches the woven text, and the user has approved the rows that are not kept.
 _Avoid_: diff check, line check, content audit
+
+### Clipping
+
+**Clip note**:
+A literature note whose body is a source exactly as captured, marked `Mode: clip`, with zkfy frontmatter and an appended `### Links` section.
+_Avoid_: raw note, preserved note, web clip (for the vault note)
+
+**Capture**:
+The file in `raw/` that a clip-to-zk run starts from: a web clip, a video transcript, or a copy of a file or text.
+_Avoid_: source file, raw copy
+
+**Adopt**:
+To turn a capture into a clip note at its vault destination: the note moves, its images are renamed after it, and the capture is released only after the note checks out.
+_Avoid_: import, move, promote

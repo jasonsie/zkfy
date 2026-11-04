@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Four commands drive everything: `/source-to-zk` (ingest), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check), `/vault-reorg` (reorganize). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
+zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five commands drive everything: `/source-to-zk` (ingest), `/clip-to-zk` (file a source verbatim), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check), `/vault-reorg` (reorganize). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
 
 ## Scope clarification
 

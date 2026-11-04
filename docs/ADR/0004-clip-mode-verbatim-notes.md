@@ -1,6 +1,6 @@
 # ADR-0004 — Clip mode: verbatim source notes
 
-Status: Accepted 2026-11-04. zkfy side implemented (validator, `clip_note.py`, skill); end-to-end waits on the web-clipper plugin's `--adopt`, `--release` and undo-adoption commands. Amends ADR-0002 D8 (allowed `Mode` values) and, for `clip-to-zk` only, commit `966bf6b` (web clips in `raw/` are durable). Implementation plan: `docs/plans/clip-to-zk.md`.
+Status: Accepted 2026-11-04. Implemented: zkfy (validator, `clip_note.py`, skill) and web-clipper 2.2 (`--adopt`, `--release`, `--unadopt`). Amends ADR-0002 D8 (allowed `Mode` values) and, for `clip-to-zk` only, commit `966bf6b` (web clips in `raw/` are durable). Implementation plan: `docs/plans/clip-to-zk.md`.
 
 ## Decision
 

@@ -1,6 +1,6 @@
 # clip-to-zk — decision record and implementation plan
 
-Status: design settled 2026-11-04 (interview Q1–Q20). zkfy side implemented on branch `feat/clip-to-zk` (steps 0–6, 8, 9 drafted); end-to-end (step 7) blocked on the web-clipper plugin's `--adopt`, `--release` and undo-adoption commands.
+Status: design settled 2026-11-04 (interview Q1–Q20). Implemented: zkfy steps 0–6 and 8 (PR #4 plus the follow-up for web-clipper 2.2), step 9 applied in the vault, step 7 run on a scratch vault holding a copy of a real clip. web-clipper 2.2 supplies `--adopt`, `--release` and `--unadopt`.
 Subject: a zkfy skill that files a source verbatim as a vault note, with zkfy frontmatter, a Train-Case filename, a domain folder and links.
 Decision of record: `docs/ADR/0004-clip-mode-verbatim-notes.md`. This file holds the details and the steps.
 
@@ -91,7 +91,7 @@ Each step lists what it changes and what proves it. Steps 0–5 can start now; s
    - `agents/zettelkasten-agent.md`: also return a sub-folder chosen from the folders in scope (the skill passes the scope's domains and their existing sub-folders), and a concept name usable as an English Train-Case filename.
    - `agents/cross-pollinator-agent.md` (Step 1, lines 74–78): a `Mode: clip` branch that reads the concept from the frontmatter (`Aliases`, `Description`) and the opening paragraphs, since a clip has no `### Definition`.
 6. **Skill `skills/clip-to-zk/SKILL.md`.** Input detection, the flow above, every stop (exit 2 → ask for `--html`, exit 3 → ask, duplicate `Link` → stop, domain or folder unclear → ask, verify or lint failure → keep both copies), the cleanup rule, and the report: note path, Mode, images saved and left remote, backlinks proposed and applied, Map suggestions, lint result, catalog rebuilt. Map-suggestion wording comes from `agents/obsidian-formatter-agent.md` Step 5.
-7. **End-to-end (blocked on the web-clipper plugin).** Needs the `web-clipper` command on PATH with `--adopt`, `--localize` on adopted notes, and the two-phase adopt below. Run on a scratch vault, then on one real clip from the vault's `raw/`.
+7. **End-to-end.** Run 2026-11-04 on a scratch vault holding a copy of the real clip "A Look at PostgreSQL User-defined Data Types": find-link, preview, adopt (dry run, then real), format, release all exit 0; lint finds 0 issues; the raw clip and its old image folder are gone; the images are renamed `Database-Postgres-User-Defined-Types-NN-*`. Still to do: one run through the skill itself on the real vault.
 8. **Docs.** `CLAUDE.md` (Note modes table gains a `clip` row; the "Every note declares `Mode: atom | thesis`" line and the "Note conventions" frontmatter block, which lists `Before`, `Next`, `Src` and `Mode: atom | thesis`, both gain the clip exception; the raw-lifecycle exception; the pipeline section names clip-to-zk); `AGENTS.md` (lines 52–63 modes; lines 69–83 schema brought to the minimal set); `README.md`; `docs/CODEMAPS/plugin.md`; the durability lines in `agents/markdown-file-agent.md:199`, `skills/zk-note/SKILL.md:313` and `commands/source-to-zk.md:155` gain "except clip-to-zk, which adopts its clip"; `TODO.md` gains refresh (Q16) and batch (Q17); `GLOSSARY.md` gains **Clip note** and **Adopt** once that file lands on main; plugin version bump.
 9. **Vault-side proposals (the user's to apply).** `docs/workflows/vault-authoring.md`: a placement exception for clip notes and the `Link` exception; `docs/knowledge/maintenance.md` and `docs/knowledge/query.md`: `clip` in the profile lists. Draft the wording; do not edit the vault.
 
@@ -104,7 +104,7 @@ Q9 says `raw/` is deleted only after zkfy has verified and linted the new note, 
 
 zkfy runs `--release` in step 7 of the flow. This requirement goes to the web-clipper session.
 
-A third command undoes an adoption (removes the adopted note and renamed images, leaves the `raw/` clip): zkfy needs it when `clip_note.py format` exits 2 after `--adopt`, so the staged copy goes away as Q9 requires. Until it exists, the skill stops and reports both paths, deleting nothing.
+A third command undoes an adoption (removes the adopted note and renamed images, leaves the `raw/` clip): zkfy needs it when `clip_note.py format` exits 2 after `--adopt`, so the staged copy goes away as Q9 requires. web-clipper 2.2 ships it as `--unadopt`; the adoption record lives in `<attachments>/.adoptions.json`.
 
 ## Proposed vault wording (step 9; the user applies it)
 

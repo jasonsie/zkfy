@@ -7,7 +7,7 @@
    },
    "license": "MIT",
    "dependencies": [
-      { "name": "web-clipper", "marketplace": "web-clipper-marketplace", "version": "^2.1" }
+      { "name": "web-clipper", "marketplace": "web-clipper-marketplace", "version": "^2.2" }
    ],
    "keywords": [
       "zettelkasten",

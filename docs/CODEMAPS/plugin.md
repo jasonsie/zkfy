@@ -102,7 +102,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `raw/` | Target vault | Source drop zone (excluded from queries) |
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
-| `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.1`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html`. `clip-to-zk` also needs `--adopt`, `--release` and undo-adoption (not yet in 2.1) |
+| `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.2`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html`. `clip-to-zk` uses `--adopt`, `--release` and `--unadopt` (2.2) |
 | Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
 
 ## Error Handling

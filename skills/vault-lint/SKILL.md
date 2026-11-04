@@ -286,7 +286,7 @@ The budget covers `### Definition`, `### Why It Matters`, `### Boundary`, and an
 
 #### Check 10: Legacy `--preserve` artifacts (MEDIUM)
 
-The `--preserve` mode is removed per ADR-0001 D5. Pre-existing notes may still carry artifacts from that era; flag them so future migration (`/vault-migrate`) can target them.
+The `--preserve` mode is removed per ADR-0001 D5. Pre-existing notes may still carry artifacts from that era; flag them for a separately approved hand edit; there is no batch migration command (ADR-0005).
 
 **What constitutes a legacy artifact (any one match is sufficient to flag):**
 - A `### Abstract` heading (the old skeleton's first section — superseded by `### Definition`)
@@ -305,10 +305,10 @@ The `--preserve` mode is removed per ADR-0001 D5. Pre-existing notes may still c
 **Auto-fixable with `--fix`** (conservative):
 - Delete `format_mode` and `preserve` frontmatter keys.
 - Rename `### Abstract` → `### Definition` **only if** the note has no existing `### Definition` heading; otherwise leave both in place and report.
-- For `### Content`: do **not** rename or rewrite — leave as-is and emit a warning. The 500-char budget makes a safe automatic migration impossible; the user should run `/vault-migrate` once it ships.
-- Preserve-era comment markers: do **not** strip automatically; report and leave for `/vault-migrate`.
+- For `### Content`: do **not** rename or rewrite — leave as-is and emit a warning. The 500-char budget makes a safe automatic migration impossible; the user edits the note by hand after approving the change; no batch migration exists (ADR-0005).
+- Preserve-era comment markers: do **not** strip automatically; report and leave for a separately approved edit.
 
-**Conservatism rule:** when in doubt, do not auto-fix. Report the artifact and let the user run `/vault-migrate` later. Silent content rewrite is explicitly rejected (D10, ADR-0001 alternative A6).
+**Conservatism rule:** when in doubt, do not auto-fix. Report the artifact and let the user decide on a hand edit later. Silent content rewrite is explicitly rejected (D10, ADR-0001 alternative A6).
 
 ---
 

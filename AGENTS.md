@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Three commands drive everything: `/source-to-zk` (ingest), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
+zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Four commands drive everything: `/source-to-zk` (ingest), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check), `/vault-reorg` (reorganize). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
 
 ## Scope clarification
 
@@ -42,6 +42,19 @@ Scoped knowledge retrieval and maintenance use `scripts/knowledge.py` and requir
 Do not infer a knowledge vault from the current project directory. The installed `vault-knowledge` launcher supplies a machine-local binding. All scoped reads, link expansion, indexing, and health reports share the allowlist, exclude `raw/` completely, and reject symlink/traversal paths. Do not add per-skill exclusion lists or whole-vault fallback scans. MOCs are optional navigation, not coverage gates.
 
 `.claude/index.md` and related catalog files (`.claude/index/`, `.claude/QUALITY.md`, manifest) are generated only by `vault-knowledge build`. Never hand-edit them. `.claude/log.md` is frozen history and is no longer written. Existing notes, MOCs, and neighbor navigation are never edited automatically; ingest prompts return proposals (including `cross-pollinator-agent` with `Dry run: true`) that the user approves.
+
+## Reorganization (vault-reorg)
+
+- One concept, one note: merge only notes that explain the same concept; related notes get links, series stay.
+- A merge is a weave gated by a unit ledger (the preservation check), never append mode or pipeline re-synthesis.
+- Woven notes use the legacy profile (`### Abstract` / `### Content` / `### Links`, no `Mode`).
+- The survivor keeps the best-linked filename unless it misleads.
+- `apply` stages its own files and never commits without the user's yes.
+- The survey runs only inside the skill, never from `build`.
+- `raw/` is excluded.
+- The pass record lives in the vault's `docs/plans/`.
+
+See `docs/ADR/0005-reorganization-as-reviewed-weave.md`; the authoritative procedure is `skills/vault-reorg/SKILL.md`.
 
 ## Spinoff candidates
 

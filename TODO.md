@@ -28,17 +28,18 @@ Cross-session backlog for features deferred from active refactors.
 
 ---
 
-### [feat] `vault-knowledge merge-plan` — reviewed consolidation (replaces `/vault-migrate`)
+### [feat] `vault-knowledge` launcher installer owned by zkfy
 
-**Context:** The CS vault's simplification plan (`docs/plans/vault-simplification.md` in the vault, approved 2026-10-20) replaces batch re-runs of old notes through the agent pipeline with small, reviewed merges. The spinoff backlog was retired in the same change, so its staleness question is moot.
+**Context:** ai_dotfiles dropped its `scripts/install/knowledge.py` (the vault binding plus the `~/.local/bin/vault-knowledge` launcher) in commit `dc9bfab`, whose message says zkfy must install it. The vault's docs and the `query` skill still call the launcher. On this machine `~/.config/zkfy/knowledge.json` and `~/.local/bin/vault-knowledge` are missing.
 
 **Acceptance criteria:**
 
-- `vault-knowledge merge-plan --into <survivor> <absorbed>...` prints a dry-run mapping: survivor (exact filename kept), absorbed notes, every inbound link to rewrite (body, MOCs, Before/Next), and anchors that would break.
-- `--apply` performs only the printed mapping. Section merging stays a human/model edit; the tool rewrites links and removes absorbed files.
-- Ratchet hook validates the staged result; no generated artifact is hand-edited.
+- A `scripts/install-launcher.py` writes `~/.config/zkfy/knowledge.json` (keys `python`, `tool`, `vault`; see `scripts/knowledge-launcher.py`) and links `~/.local/bin/vault-knowledge` to `scripts/knowledge-launcher.py`.
+- It is idempotent: a second run changes nothing.
+- `--dry-run` prints what would change and writes nothing.
+- `--uninstall` removes the binding file and the link.
 
-**Not in scope:** semantic merging, automatic candidate detection.
+**Not in scope:** changing how `/vault-reorg` binds. It uses the current folder's `docs/knowledge/scope.json`.
 
 ---
 

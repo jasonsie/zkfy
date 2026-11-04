@@ -20,7 +20,7 @@ zettelkasten-agent (Discover, sonnet)
 
 - **zettelkasten-agent** identifies the atomic concept, picks the domain, classifies metadata (Categories / Sub-Categories / Aliases / tags), and discovers related notes. No distillation.
 - **conceptual-modeler-agent** classifies `note_mode` (atom vs thesis) at the start of Distill, then branches its output skeleton accordingly: atom-mode produces `one_line_definition` + optional `why_it_matters` / `boundary` / `code_example`; thesis-mode produces `executive_summary` + a list of `themes` + optional `appendix`. Both modes emit `mental_model` (with `modality_hint` for `diagram-agent`), `spinoff_candidates`, and a mode-aware char-budget self-check.
-- **obsidian-formatter-agent** branches skeleton assembly on `note_mode`, writes the file with `Mode:` frontmatter (`Before: ''`, `Next: ''`), and returns suggested MOC entries. It never edits neighbors or MOCs.
+- **obsidian-formatter-agent** branches skeleton assembly on `note_mode`, writes the file with `Mode:` frontmatter (minimal set, no `Before`/`Next`), and returns suggested MOC entries. It never edits neighbors or MOCs.
 
 The 3-stage architecture itself is unchanged from ADR-0001 — only the modeler's internal branching and the formatter's assembly logic are mode-aware.
 
@@ -86,16 +86,14 @@ Date: YYYY-MM-DD
 Type: literature
 Mode: atom        # REQUIRED: atom | thesis — written by obsidian-formatter-agent from modeler's note_mode
 Categories: []
-Sub-Categories: []
 Aliases: []
 tags: []          # controlled vocabulary — see zettelkasten-agent for the list
-Before: ''       # new notes start empty; never auto-wired
-Next: ''
-Link: '<source-url>'
-Src: '[[raw/src-file]]'
+Src: '<source-url or citation>'
 ```
 
-New notes get `Before: ''` and `Next: ''`. Neighbor navigation is not rewired automatically; any change to it is a proposal the user approves.
+This is the minimal set `obsidian-formatter-agent` writes (video sources add `Link: '<video-url>'`). New notes get no `Sub-Categories`, `Before` or `Next`: the folder and the generated catalog carry that, and the vault's authoring rules forbid them on new notes. Existing notes keep their fields; never strip or backfill them. Neighbor navigation is not rewired automatically; any change to it is a proposal the user approves.
+
+Clip notes (`Mode: clip`) do not follow this block. They carry the vault's minimal set plus `Link` (see ADR-0004).
 
 ## Agent delegation pattern
 

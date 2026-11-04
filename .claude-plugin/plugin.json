@@ -1,11 +1,14 @@
 {
    "name": "zkfy",
-   "version": "1.2.0",
+   "version": "1.3.0",
    "description": "transform unstructured text into structured Zettelkasten notes with metadata and links",
    "author": {
       "name": "Jason"
    },
    "license": "MIT",
+   "dependencies": [
+      { "name": "web-clipper", "marketplace": "web-clipper-marketplace", "version": "^2.1" }
+   ],
    "keywords": [
       "zettelkasten",
       "knowledge-management",

@@ -77,7 +77,7 @@ Based on `REFERENCE_TYPE`:
 |------|------------|
 | `pdf` | Use Read tool with `pages` parameter; look up page range in the page-map table in the RAG skill |
 | `md` | Use Read tool on the specific reference `.md` file(s) mapped to this item |
-| `web` | Clip the canonical documentation URL with the global `web-clipper` skill (`python3 ~/.claude/skills/web-clipper/scripts/clip.py <url> --out <dir>`); on exit 2 save the page from your browser and rerun with `--html <file>` |
+| `web` | Clip the canonical documentation URL with the `web-clipper` plugin, a zkfy dependency (`web-clipper <url> --out <dir>`); on exit 2 save the page from your browser and rerun with `--html <file>` |
 | `repo` | Use Serena MCP (`mcp__serena__*`) + Grep/Read to scan source code |
 | `none` | Skip to Phase 2 Step 2 (deep research only) |
 

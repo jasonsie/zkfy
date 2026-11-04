@@ -128,7 +128,7 @@ Then convert this source to structured Markdown:
 Requirements:
 - Zero data loss policy
 - Preserve tables/code/SVGs
-- Web URL: clip it with the global web-clipper skill (python3 ~/.claude/skills/web-clipper/scripts/clip.py "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
+- Web URL: clip it with the web-clipper plugin, a zkfy dependency (web-clipper "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
 - Text / transcript: output to raw/src-<title-kebab>.md
 - If the clipper exits 2 (bot challenge, login wall, paywall), stop and ask the user to save the page from their browser and rerun with --html <file>; do not substitute WebFetch or any scraper
 - For complex diagrams, you may sub-delegate to ~/.claude/agents/diagram-agent.md

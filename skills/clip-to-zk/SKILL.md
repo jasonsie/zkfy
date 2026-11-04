@@ -14,11 +14,15 @@ reasons: `${CLAUDE_PLUGIN_ROOT}/docs/ADR/0004-clip-mode-verbatim-notes.md`; the 
 
 The body is never edited by hand. Every file operation runs through one of three commands, via Bash:
 
-- `web-clipper` — the web-clipper plugin; owns clip files: fetching, images, `--adopt`, `--release`, `--localize`
+- `web-clipper` — the web-clipper plugin (2.2 or later); owns clip files: fetching, images, `--adopt`,
+  `--release`, `--unadopt`, `--localize`
 - `CLIP` = `python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/clip_note.py --vault "<V>"`
 - `KNOW` = `python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.py --vault "<V>"`
 
 `web-clipper` and `CLIP` take `--json`: read the JSON line and act on the exit code as each step says.
+Run every command from the vault root (`cd "<V>" && …`): web-clipper resolves relative paths against the
+current folder, and `<C>`, `<D>` below are vault-relative. Paths web-clipper reports back are absolute;
+`CLIP` accepts those as they are.
 
 ## Steps
 
@@ -111,10 +115,11 @@ needs undoing.
 
 ### 7. Place (clips only)
 
-`web-clipper --adopt "<C>" --to "<D>" --stem "<stem of D>" --vault "<V>" --dry-run --json`, then the same without
-`--dry-run`. It writes the note and renamed images (`<stem>-NN-<name>`) and leaves `<C>` in place. Keep the
-new attachment folder as `<A>`. A web-clipper without `--adopt` → stop: this run needs the web-clipper plugin
-version that has it.
+`web-clipper --adopt "<C>" --to "<D>" --vault "<V>" --dry-run --json`, then the same without `--dry-run`. It
+copies the note and the renamed images (`<stem of D>-NN-<name>`) and leaves `<C>` in place. Keep the JSON's
+`assets_dir` as `<A>` (null when the clip has no local images). Exit `3` (destination, image folder or an
+earlier adoption exists) or `4` (an image does not match its sha256) → stop and report; nothing was written.
+A web-clipper older than 2.2 (no `--adopt`) → stop: this run needs web-clipper 2.2.
 
 Video, file and text sources skip this step.
 
@@ -126,9 +131,9 @@ CLIP format --kind <kind> --source "<D for clips, C otherwise>" --dest "<D>" --o
 ```
 
 After a clean preview, the only expected failure here is exit `2`: the adopted body or renamed images differ
-from the capture. Then stop, report both paths and delete nothing (the web-clipper command that undoes an
-adoption is not built yet). Exit `6` → keep the note **and** `<C>`, report each issue, skip step 9. Any other
-exit → stop and report.
+from the capture. Then undo the adoption with `web-clipper --unadopt "<C>" --vault "<V>" --json` (it deletes
+only the adopted copy; `<C>` stays) and stop. Exit `6` → keep the note **and** `<C>`, report each issue, skip
+step 9. Any other exit → `--unadopt` the same way, then stop and report.
 
 ### 9. Cleanup
 

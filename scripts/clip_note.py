@@ -233,8 +233,21 @@ def link_matches(corpus, url, skip=()):
             if p not in skip and want in recorded_urls(n.meta)]
 
 
+def vault_rel(root, value):
+    """A vault-relative POSIX path from either a relative path or an absolute one inside the vault
+    (web-clipper's --json reports absolute paths)."""
+    if not os.path.isabs(os.path.expanduser(value)):
+        return K.relative(value)
+    p = Path(os.path.abspath(os.path.expanduser(value)))
+    p = p.parent.resolve() / p.name
+    try:
+        return K.relative(p.relative_to(root).as_posix())
+    except ValueError as e:
+        raise K.KnowledgeError(f"{value} is outside the vault") from e
+
+
 def check_dest(root, scope, dest, source):
-    dest = K.relative(dest)
+    dest = vault_rel(root, dest)
     if not dest.endswith(".md") or not K.FILENAME_RE.fullmatch(PurePosixPath(dest).stem):
         raise K.KnowledgeError(f"{dest}: filename must be ASCII Train-Case, e.g. Database-Postgres-Index-Internals.md")
     if not scope.eligible(dest):
@@ -265,8 +278,8 @@ def cmd_find_link(root, args):
 
 def cmd_format(root, args):
     scope = K.Snapshot(root).scope
-    source = K.relative(args.source)
-    original = K.relative(args.original or source)
+    source = vault_rel(root, args.source)
+    original = vault_rel(root, args.original) if args.original else source
     dest, path = check_dest(root, scope, args.dest, source)
     try:
         source_text = K.read_file(root, source).decode("utf-8-sig")
@@ -277,7 +290,7 @@ def cmd_format(root, args):
     original_meta, original_body = split_frontmatter(original_text)
     _, body = split_frontmatter(source_text)
     meta, report = adapt(args.kind, original_meta, discover)
-    embeds = verify(original_body, body, root, args.assets and K.relative(args.assets), args.kind)
+    embeds = verify(original_body, body, root, args.assets and vault_rel(root, args.assets), args.kind)
     data = compose(meta, body, _list(discover.get("related"))).encode()
     corpus = corpus_with(root, dest, data)
     if meta.get("Link"):
@@ -295,7 +308,7 @@ def cmd_format(root, args):
 def cmd_release(root, args):
     targets = []
     for name in args.paths:
-        name = K.relative(name)
+        name = vault_rel(root, name)
         if PurePosixPath(name).parts[0] != "raw" or not name.endswith(".md"):
             raise K.KnowledgeError(f"{name}: release deletes only .md captures under raw/")
         path = K.safe_path(root, name)

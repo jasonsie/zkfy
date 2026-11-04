@@ -105,6 +105,20 @@ zkfy runs `--release` in step 7 of the flow. This requirement goes to the web-cl
 
 A third command undoes an adoption (removes the adopted note and renamed images, leaves the `raw/` clip): zkfy needs it when `clip_note.py format` exits 2 after `--adopt`, so the staged copy goes away as Q9 requires. Until it exists, the skill stops and reports both paths, deleting nothing.
 
+## Proposed vault wording (step 9; the user applies it)
+
+The vault owns these files; zkfy never edits them. Paths are relative to the vault root.
+
+- `docs/workflows/vault-authoring.md`, Placement, after the PostgreSQL paragraph:
+  > Clip notes (`Mode: clip`, written by `/zkfy:clip-to-zk`) are always their own file in the matching bucket: a verbatim source is not a chapter. The topic note may link to it.
+- Same file, the metadata paragraph, after "Do not add `Sub-Categories`, `Link`, `Before`, or `Next` to new notes;…":
+  > Clip notes are the one exception for `Link`: it holds the source URL, because their `raw/` capture is removed once the note is filed.
+- Same file, Note profiles list, after the thesis line:
+  > - **Clip (`Mode: clip`):** the source verbatim with `### Links` appended; no body budget; in-page anchors are not checked (zkfy ADR-0004).
+- `docs/knowledge/maintenance.md`, Structural profiles sentence ("Legacy notes require…; thesis notes use…"), append:
+  > clip notes require only Links.
+- `docs/knowledge/query.md`, Formats sentence ("Existing legacy, atom, thesis, structure, and fleeting notes remain readable."): add `clip` to the list.
+
 ## Environment notes (2026-11-04)
 
 - The `vault-knowledge` launcher and its binding (`~/.local/bin/vault-knowledge`, `~/.config/zkfy/knowledge.json`) are missing on this machine. Until they exist, the skill runs `python3 <plugin>/scripts/knowledge.py --vault <root>` with the `--vault` override (Q18).

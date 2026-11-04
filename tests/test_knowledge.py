@@ -201,6 +201,23 @@ class VaultTest(unittest.TestCase):
         with self.assertRaises(k.KnowledgeError):
             k.run_hook(self.root, "ratchet")
 
+    def test_renaming_a_baselined_note_keeps_the_ratchet_green(self):
+        self.put("333.ai/AI-Debt.md", note().replace("### Abstract\n", ""))
+        self.git("add", ".")
+        self.git("commit", "-qm", "legacy debt")
+        self.put(k.BASELINE, k.encoded(k.baseline_data(self.corpus("head"))).decode())
+        self.git("add", ".")
+        self.git("commit", "-qm", "baseline")
+        self.git("mv", "333.ai/AI-Debt.md", "333.ai/AI-Debt-Renamed.md")
+        self.assertIn(b"R", self.git("diff", "--cached", "--name-status", "-M"))
+        report, code = k.run_hook(self.root, "ratchet")
+        self.assertEqual(code, 0, report)
+        self.assertEqual(report["new_issues"], [])
+        self.assertTrue(report["staged_generated"])
+        paths = {i["path"] for i in json.loads(self.git("show", ":" + k.BASELINE))["issues"]}
+        self.assertIn("333.ai/AI-Debt-Renamed.md", paths)
+        self.assertNotIn("333.ai/AI-Debt.md", paths)
+
     def test_report_only_never_stages(self):
         self.initialize_catalog()
         self.put("333.ai/AI-Harness.md", note("[[Missing]]"))

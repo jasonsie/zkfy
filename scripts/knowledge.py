@@ -790,9 +790,12 @@ def run_hook(root, mode):
     staged_baseline = staged.control(BASELINE)
     if staged_baseline:
         submitted = json.loads(staged_baseline)
-        if submitted.get("version") != VERSION or not {issue_key(x) for x in submitted["issues"]} <= allowed_keys:
+        if submitted.get("version") != VERSION:
             raise KnowledgeError("Baseline expansion requires a separately reviewed reset; normal commits cannot expand it")
-        allowed_keys &= {issue_key(x) for x in submitted["issues"]}
+        submitted_keys = {issue_key(x) for x in renamed_baseline(root, submitted["issues"])}
+        if not submitted_keys <= allowed_keys:
+            raise KnowledgeError("Baseline expansion requires a separately reviewed reset; normal commits cannot expand it")
+        allowed_keys &= submitted_keys
     issues = corpus.issues()
     new = [x for x in issues if issue_key(x) not in allowed_keys]
     report = {"mode": mode, "issues": len(issues), "new_issues": new, "staged_generated": False}

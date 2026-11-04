@@ -80,8 +80,11 @@ Write the Discover result to a JSON file in the session scratchpad, never inside
 
 ```json
 {"categories": [...], "aliases": [...], "tags": [...], "related": ["Note-Name", ...],
- "tag_vocabulary": ["<every tag in zettelkasten-agent.md's Tags vocabulary>"]}
+ "tag_vocabulary": ["<every facet tag in the tags line of obsidian-formatter-agent.md Step 3>"]}
 ```
+
+The tag vocabulary is the formatter's facet list, which matches the vault's authoring rules
+(`docs/workflows/vault-authoring.md`); `tags` from Discover must come from it too.
 
 Done when `<D>`'s stem is ASCII Train-Case, its folder exists, `categories` has at least one entry and every `related` name is an existing note.
 

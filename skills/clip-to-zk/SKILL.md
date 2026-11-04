@@ -58,7 +58,8 @@ Exit 3 lists the notes that already record the source:
 - **File**: `cp` it to `raw/src-<kebab-title>.md`. The original stays where it is.
 - **Text**: write it to `raw/src-<kebab-title>.md` with a quoted heredoc (`cat > … <<'EOF'`).
 
-Done when `<C>` exists. For a clip, also keep the attachment folder `<A>` from the JSON summary.
+Done when `<C>` exists. For a clip, also keep the capture's attachment folder: `assets_dir` in the clipper's
+JSON summary, or, for an existing `raw/` clip, the folder whose `assets.json` lists the clip's images.
 
 ### 5. Discover
 
@@ -84,40 +85,54 @@ Write the Discover result to a JSON file in the session scratchpad, never inside
 
 Done when `<D>`'s stem is ASCII Train-Case, its folder exists, `categories` has at least one entry and every `related` name is an existing note.
 
-### 6. Place (clips only)
+### 6. Preview
+
+Before anything is staged, dry-run the whole note from the capture itself:
+
+```bash
+CLIP format --kind <kind> --source "<C>" --dest "<D>" --original "<C>" \
+  [--assets "<capture's attachment folder>"] --discover "<discover.json>" --dry-run --json
+```
+
+Show the user the destination, the frontmatter keys, the adapter report and the lint result. Continue only on
+exit `0` with an empty `lint`; on any other result, stop and report it. Nothing has been written, so nothing
+needs undoing.
+
+| Exit | Meaning | Action |
+|---|---|---|
+| `6` | lint issues in the would-be note | report each issue; stop |
+| `3` | duplicate source, or `<D>` exists | stop; show the conflicting note |
+| `4` | the adapter refused a frontmatter key | stop; name the key (rename it in the clip template) |
+| `2` | body or images do not check out | stop; report the message |
+| `1` | path, scope or input problem | stop; show the message |
+
+### 7. Place (clips only)
 
 `web-clipper --adopt "<C>" --to "<D>" --stem "<stem of D>" --vault "<V>" --dry-run --json`, then the same without
 `--dry-run`. It writes the note and renamed images (`<stem>-NN-<name>`) and leaves `<C>` in place. Keep the
 new attachment folder as `<A>`. A web-clipper without `--adopt` → stop: this run needs the web-clipper plugin
 version that has it.
 
-Video, file and text sources skip this step: the source for step 7 is `<C>` itself.
+Video, file and text sources skip this step.
 
-### 7. Format
+### 8. Format
 
 ```bash
 CLIP format --kind <kind> --source "<D for clips, C otherwise>" --dest "<D>" --original "<C>" \
-  [--assets "<A>"] --discover "<discover.json>" --dry-run --json
+  [--assets "<A>"] --discover "<discover.json>" --json
 ```
 
-Show the user the destination, the frontmatter keys, the adapter report and the lint result, then run it
-without `--dry-run`.
+After a clean preview, the only expected failure here is exit `2`: the adopted body or renamed images differ
+from the capture. Then stop, report both paths and delete nothing (the web-clipper command that undoes an
+adoption is not built yet). Exit `6` → keep the note **and** `<C>`, report each issue, skip step 9. Any other
+exit → stop and report.
 
-| Exit | Meaning | Action |
-|---|---|---|
-| `0` | written, lint clean | continue |
-| `6` | written, lint issues | report each issue; keep the note **and** `<C>`; skip step 8 |
-| `2` | body or images differ from the capture; nothing written | stop; report both paths; delete nothing |
-| `3` | duplicate source, or `<D>` exists | stop; show the conflicting note |
-| `4` | the adapter refused a frontmatter key | stop; name the key (rename it in the clip template) |
-| `1` | path, scope or input problem | stop; show the message |
+### 9. Cleanup
 
-### 8. Cleanup
-
-Only after step 7 exits `0`. A clip → `web-clipper --release "<C>" --vault "<V>" --json`. A video, file or text
+Only after step 8 exits `0`. A clip → `web-clipper --release "<C>" --vault "<V>" --json`. A video, file or text
 capture → `CLIP release "<C>" --json`. Only this run's capture goes; a user's original file is never touched.
 
-### 9. Integrate
+### 10. Integrate
 
 1. Delegate to `${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md` with the new note, the vault root, the
    step 5 candidates and `Dry run: true`. Show its proposals; apply only the ones the user approves.

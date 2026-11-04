@@ -1,6 +1,6 @@
 # clip-to-zk — decision record and implementation plan
 
-Status: design settled 2026-11-04 (interview Q1–Q20); implementation not started.
+Status: design settled 2026-11-04 (interview Q1–Q20). zkfy side implemented on branch `feat/clip-to-zk` (steps 0–6, 8, 9 drafted); end-to-end (step 7) blocked on the web-clipper plugin's `--adopt`, `--release` and undo-adoption commands.
 Subject: a zkfy skill that files a source verbatim as a vault note, with zkfy frontmatter, a Train-Case filename, a domain folder and links.
 Decision of record: `docs/ADR/0004-clip-mode-verbatim-notes.md`. This file holds the details and the steps.
 
@@ -17,9 +17,10 @@ Decision of record: `docs/ADR/0004-clip-mode-verbatim-notes.md`. This file holds
   2. capture    web-clipper plugin: clip (URL → raw/<Title>.md + raw/assets/<slug>/)
                 video-agent / copy for video, file, text → raw/src-*.md
   3. Discover   zettelkasten-agent: domain + sub-folder, concept, Categories, tags, Aliases, related
-  4. place      web-clipper plugin: --adopt (note to its destination, images renamed, ![[…]] rewritten)
-  5. format     clip_note.py: frontmatter adapter + writer, append ---/### Links
-  6. verify     body equal to the capture apart from embed targets; knowledge.py issues() empty
+  4. preview    clip_note.py format --dry-run on the capture: adapter, duplicates, lint, before anything is staged
+  5. place      web-clipper plugin: --adopt (note to its destination, images renamed, ![[…]] rewritten)
+  6. format     clip_note.py: frontmatter adapter + writer, append ---/### Links; verifies the body equals
+                the capture apart from embed targets, images match assets.json, knowledge.py issues() empty
   7. cleanup    delete this run's raw/ leftovers, only after 6 passes
   8. integrate  cross-pollinator (Dry run: true), Map suggestions in the report, lint + build
 ```

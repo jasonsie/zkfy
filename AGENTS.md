@@ -33,7 +33,7 @@ Two prompt files must exist outside this repo or the relevant agents abort:
 - `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
 - `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
 
-Skills and commands reference agent files as `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the plugin's install directory in skill and command markdown. It does not substitute in agent files, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
+Skills and commands reference agent files as `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the plugin's install directory when it loads skill, command and agent content (plugins/components.md "Path variables"). A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
 
 ## Vault contract
 

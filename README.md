@@ -26,13 +26,14 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 4. **Phase 2.5**: Cross-pollinate — propose backlinks for 5-10 existing related notes (dry run); apply only the ones you approve
 5. **Phase 3**: Validate — run `~/.local/bin/vault-knowledge lint`, then `~/.local/bin/vault-knowledge build` to regenerate the catalog
 
-### Three Core Operations (LLM Wiki Pattern)
+### Four Core Operations (LLM Wiki Pattern)
 
 | Operation | Command | Description |
 |-----------|---------|-------------|
 | **Ingest** | `/source-to-zk` | Source → note → cross-pollinate (proposals) → lint + build |
 | **Query** | `/query-to-note` | Search vault → synthesize → file as permanent note → cross-pollinate (proposals) → lint + build |
 | **Lint** | `/vault-lint` | Detect contradictions, orphans, stale content, concept gaps → proposed fixes applied only on approval |
+| **Reorganize** | `/vault-reorg` | Survey → interview → mapping → weave + ledger → apply → stage → confirm commit |
 
 ### Specialized Agents
 
@@ -53,6 +54,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 - **Cross-pollination**: New notes propose backlinks to existing related notes; you approve what is applied
 - **Vault catalog**: `.claude/index.md` and related catalog files are generated only by `vault-knowledge build`; `.claude/log.md` is frozen history and is no longer written
 - **Semantic linting**: 12 health checks (contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps, Concept-First conformance, Hybrid Mode conformance)
+- **Reorganization**: `/vault-reorg` merges notes that explain the same concept by weaving them into one note, checked by a unit ledger so no content is lost; it stages its own files and commits only on your yes
 - **Progress tracking**: Visual feedback for each pipeline phase
 
 ## Installation
@@ -167,6 +169,22 @@ Checks 8–12 enforce the Concept-First and Hybrid Mode specs (see `docs/ADR/000
 
 **Note modes** (ADR-0002). Every note declares `Mode: atom | thesis` in frontmatter. The modeler picks the mode per source: atom notes hold a single concept (≤ 500-char body); thesis notes carry a macro claim with supporting theme chapters (per-chapter 200–1500-char soft target). Completion reports show 🧬 Mode after the note location.
 
+#### `/vault-reorg` — Reorganize the vault
+
+Reorganize a vault in passes. A pass is one run over one scope, ending in one reviewed change set. Run it from the vault root (the folder that holds `docs/knowledge/scope.json`).
+
+```bash
+/vault-reorg                                # Survey first, then the opening dialogs
+/vault-reorg 111.cs/language/javascript     # Start with this folder as the scope
+/vault-reorg --job survey                   # Detection report only, nothing changes
+```
+
+The skill surveys the vault, then asks in dialogs. The first dialog picks the jobs: Survey (a detection report), Consolidate (merge notes that cover one concept), Restructure (moves, flattening and renames, no merges) and Curate (compare a topic's coverage with its canonical subtopics). The next picks the scope, and the last asks per-job options.
+
+A merge is a weave, not an append. You approve one outline for the concept. Every unique unit (paragraph, list, table, code block) of every clustered note is placed under it once, and repeated units keep their best version. A unit ledger records what happened to each unit (kept, reworded, duplicate of, dropped), and a deterministic check must pass before any absorbed note is deleted. You review every row that is not kept.
+
+`apply` stages only the files it touched, rebuilds the catalog, and asks before committing. It refuses to start when a file it must change has uncommitted edits. `raw/` is never touched. Coverage gaps found by Curate become an ingest backlog in the pass record under the vault's `docs/plans/`; no stub notes are created. See `docs/ADR/0005-reorganization-as-reviewed-weave.md`.
+
 #### `/notion-to-zk` — Notion Page to Zettelkasten
 
 Import any Notion page directly into your vault via MCP integration.
@@ -271,6 +289,7 @@ zkfy/
 │   ├── source-to-zk.md          # Ingest: web/video/text → vault
 │   ├── query-to-note.md         # Query: search → synthesize → file as note
 │   ├── vault-lint.md            # Lint: semantic health checks
+│   ├── vault-reorg.md           # Reorganize: survey → weave → staged change set
 │   └── notion-to-zk.md          # Notion page → vault (via MCP)
 ├── agents/
 │   ├── video-agent.md            # Video transcript extraction
@@ -285,7 +304,11 @@ zkfy/
 │   ├── query/                   # Read-only vault queries via vault-knowledge search/read
 │   ├── vault-index/             # Catalog generation via vault-knowledge build
 │   ├── vault-lint/              # 12 semantic health checks; fixes proposed, applied on approval
+│   ├── vault-reorg/             # Reorganization passes: interview, weave, unit ledger, apply
 │   └── terminal-colors/         # Standardized output formatting
+├── scripts/
+│   ├── knowledge.py             # Scoped vault CLI: search, read, build, lint, reorg
+│   └── reorg.py                 # Reorganization subcommands: survey, units, plan, ledger, apply
 └── hooks/
     ├── hooks.json               # Event-based automation
     └── validate-zk-structure.sh # Hook validation script

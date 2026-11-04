@@ -308,6 +308,59 @@ class ReorgTest(unittest.TestCase):
         with self.assertRaises(k.KnowledgeError):
             r.load_mapping(self.root, "docs/plans/reorg/this/ledger.json")
 
+    def test_apply_weaves_moves_rebuilds_and_stages_only_its_own_files(self):
+        self.put("222.web/Web-Unrelated.md", simple("Unrelated pending work") + "\nhalf-written paragraph\n")
+        self.put("222.web/Web-Untracked.md", simple("Untracked"))
+        before_unrelated = self.read("222.web/Web-Unrelated.md")
+        mapping = self.weave_mapping()
+        result = r.apply(self.corpus(), mapping)
+        self.assertTrue(result["changed"])
+        survivor = self.JS + "Cs-Javascript-This-Binding.md"
+        self.assertFalse((self.root / self.JS / "Cs-Javascript-This.md").exists())
+        self.assertIn("#### Interview Questions", self.read(survivor))
+        self.assertIn("Aliases: [this keyword, this binding, Cs-Javascript-This]", self.read(survivor))
+        scope = self.read(self.JS + "Cs-Javascript-Scope.md")
+        self.assertIn("Next: '[[Cs-Javascript-This-Binding]]'", scope)
+        self.assertIn("[[Cs-Javascript-This-Binding#Five Binding Rules]]", scope)
+        self.assertNotIn("[[Cs-Javascript-This]]", scope)
+        self.assertEqual(self.read("000.Index/Web-Map.md"), MAP.replace("- [[Cs-Javascript-This]] - the this keyword\n", ""))
+        self.assertFalse((self.root / "111.cs/system-design/Cs-System-Design-Relative.md").exists())
+        self.assertIn("(111.cs/language/javascript/Cs-Javascript-This-Binding.md)", self.read("111.cs/Cs-System-Design-Relative.md"))
+        self.assertEqual(self.corpus().issues(), [])
+        self.assertEqual(self.corpus().freshness(), "current")
+        staged = set(os.fsdecode(x) for x in self.git("diff", "--cached", "--name-only", "--no-renames", "-z").split(b"\0") if x)
+        self.assertEqual(staged, {survivor, self.JS + "Cs-Javascript-This.md", self.JS + "Cs-Javascript-Scope.md", "000.Index/Web-Map.md",
+                                  "111.cs/system-design/Cs-System-Design-Relative.md", "111.cs/Cs-System-Design-Relative.md",
+                                  ".claude/index.md", ".claude/QUALITY.md", ".claude/index/manifest.json", ".claude/index/cs-001.md", ".claude/index/maps-001.md",
+                                  ".claude/index/web-001.md"})
+        self.assertEqual(set(result["staged"]), staged)
+        self.assertEqual(self.read("222.web/Web-Unrelated.md"), before_unrelated)
+        self.assertIn("weave", result["commit_message"])
+        self.assertIn("Cs-Javascript-This-Binding", result["commit_message"])
+
+        again = r.apply(self.corpus(), mapping)
+        self.assertFalse(again["changed"])
+        self.assertTrue(again["applied"])
+
+    def test_apply_refuses_dirty_touched_files_and_failing_ledgers(self):
+        mapping = self.weave_mapping()
+        self.put(self.JS + "Cs-Javascript-Scope.md", SCOPE + "\nunsaved edit\n")
+        before = self.tree()
+        with self.assertRaisesRegex(k.KnowledgeError, "Cs-Javascript-Scope"):
+            r.apply(self.corpus(), mapping)
+        self.assertEqual(before, self.tree())
+        self.git("checkout", "--", self.JS + "Cs-Javascript-Scope.md")
+        ledger = json.loads(self.read("docs/plans/reorg/this/ledger.json"))
+        ledger["rows"].pop()
+        self.put("docs/plans/reorg/this/ledger.json", json.dumps(ledger))
+        before = self.tree()
+        with self.assertRaisesRegex(k.KnowledgeError, "[Pp]reservation"):
+            r.apply(self.corpus(), mapping)
+        self.assertEqual(before, self.tree())
+
+    def tree(self):
+        return {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file() and ".git" not in p.parts}
+
     def test_survey_clusters_are_cliques_ranked_by_strength_not_chains(self):
         # A–B share "cache"; B–C share "strategy"; A–C share nothing: two pairs, never one chain of three.
         self.put("222.web/Web-Cache-Policy.md", simple("Cache policy"))
@@ -325,6 +378,21 @@ class ReorgTest(unittest.TestCase):
         self.assertEqual(notes[0], ["222.web/Web-Cache-Strategy.md", "222.web/Web-Caching.md"])  # shared alias ranks first
         self.assertGreater(clusters[0]["score"], clusters[-1]["score"])
         self.assertTrue(all(len(c["notes"]) == 2 for c in clusters))
+
+    def test_move_that_renames_rewrites_plain_wikilinks_and_keeps_the_old_name_as_alias(self):
+        self.put("111.cs/lonely/Cs-Lonely-Note.md", simple("Alone"))
+        self.put("111.cs/Cs-Pointer.md", simple("Points", body="See [[Cs-Lonely-Note]] and [[Cs-Lonely-Note#Content|the content]]."))
+        self.git("add", ".")
+        self.git("commit", "-qm", "lonely")
+        mapping = {"version": 1, "moves": [{"from": "111.cs/lonely/Cs-Lonely-Note.md", "to": "111.cs/Cs-Lonely.md"}]}
+        report = r.plan(self.corpus(), mapping)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual([(x["line"], x["new"]) for x in report["link_rewrites"]], [(10, "See [[Cs-Lonely]] and [[Cs-Lonely#Content|the content]].")])
+        self.assertEqual(report["aliases_to_add"], {"111.cs/lonely/Cs-Lonely-Note.md": ["Cs-Lonely-Note"]})
+        r.apply(self.corpus(), mapping)
+        self.assertIn("Aliases: [Cs-Lonely-Note]", self.read("111.cs/Cs-Lonely.md"))
+        self.assertIn("[[Cs-Lonely#Content|the content]]", self.read("111.cs/Cs-Pointer.md"))
+        self.assertEqual(self.corpus().issues(), [])
 
 
 DRAFT = """---

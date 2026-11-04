@@ -576,6 +576,128 @@ def plan(corpus, mapping):
     return report
 
 
+def yaml_scalar(value):
+    text = str(value)
+    if re.search(r"[:#,\[\]{}&*!|>'\"%@`]", text) or text != text.strip() or text in ("", "null", "true", "false"):
+        return json.dumps(text, ensure_ascii=False)
+    return text
+
+
+def with_aliases(draft, additions):
+    """Return the draft with the aliases added to its frontmatter, keeping the author's list style."""
+    if not additions:
+        return draft
+    lines = draft.splitlines(keepends=True)
+    end = body_start(lines)
+    if end == 0:
+        raise k.KnowledgeError("Draft needs frontmatter to receive aliases")
+    for i in range(1, end - 1):
+        m = re.match(r"^Aliases:\s*(.*?)\s*$", lines[i])
+        if not m:
+            continue
+        value = m[1]
+        if value.startswith("[") and value.endswith("]"):
+            inner = value[1:-1].strip()
+            items = ([inner] if inner else []) + [yaml_scalar(a) for a in additions]
+            lines[i] = f"Aliases: [{', '.join(items)}]\n"
+            return "".join(lines)
+        if value == "":
+            j = i + 1
+            while j < end - 1 and re.match(r"^\s+-\s", lines[j]):
+                j += 1
+            lines[j:j] = [f"  - {yaml_scalar(a)}\n" for a in additions]
+            return "".join(lines)
+        lines[i] = f"Aliases: [{yaml_scalar(value)}, {', '.join(yaml_scalar(a) for a in additions)}]\n"
+        return "".join(lines)
+    lines[end - 1:end - 1] = [f"Aliases: [{', '.join(yaml_scalar(a) for a in additions)}]\n"]
+    return "".join(lines)
+
+
+def edited_text(text, rewrites):
+    lines = text.splitlines(keepends=True)
+    by_line = {x["line"]: x for x in rewrites}
+    out = []
+    for n, line in enumerate(lines, 1):
+        change = by_line.get(n)
+        if change is None:
+            out.append(line)
+        elif change["action"] == "rewrite":
+            ending = line[len(line.rstrip("\r\n")):]
+            out.append(change["new"] + ending)
+    return "".join(out)
+
+
+def commit_message(mapping, report):
+    scope = mapping.get("scope") or "vault"
+    label = k.PurePosixPath(str(scope)).name or "vault"
+    weaves = [op for op in report["operations"] if op["op"] == "weave"]
+    moves = [op for op in report["operations"] if op["op"] == "move"]
+    absorbed = sum(len(op["absorbed"]) for op in weaves)
+    parts = []
+    if weaves:
+        parts.append(f"weave {absorbed + len(weaves)} notes into {len(weaves)}")
+    if moves:
+        parts.append(f"move {len(moves)} notes")
+    body = [f"refactor({label}): " + "; ".join(parts), ""]
+    for op in weaves:
+        body.append(f"- {', '.join(k.PurePosixPath(a).stem for a in op['absorbed'])} → {k.PurePosixPath(op['rename'] or op['survivor']).stem}")
+    for op in moves:
+        body.append(f"- {op['from']} → {op['to']}")
+    body.append("")
+    body.append(f"Inbound links rewritten: {len(report['link_rewrites'])}. Ledger-checked; catalog rebuilt.")
+    return "\n".join(body) + "\n"
+
+
+def apply(corpus, mapping, allow_dirty=False):
+    """Perform a planned mapping, rebuild the catalog, stage exactly the touched files. Never commits."""
+    report = plan(corpus, mapping)
+    if report["applied"]:
+        return {**report, "changed": False, "staged": [], "commit_message": ""}
+    if report["errors"]:
+        raise k.KnowledgeError("Mapping has errors: " + "; ".join(report["errors"]))
+    if report["draft_issues"]:
+        raise k.KnowledgeError("Draft has structural issues: " + json.dumps(report["draft_issues"], ensure_ascii=False))
+    if report["ledger"] is not None and not report["ledger"]["ok"]:
+        raise k.KnowledgeError("Preservation check failed: " + json.dumps(report["ledger"]["merges"], ensure_ascii=False))
+    if report["dirty"] and not allow_dirty:
+        raise k.KnowledgeError("Uncommitted edits in files the mapping touches: " + ", ".join(report["dirty"]))
+    root = corpus.snapshot.root
+    writes, deletes, moves = {}, [], []
+    for m in mapping.get("merges", []):
+        draft = read_any(root, m["draft"]).decode("utf-8-sig")
+        writes[m["survivor"]] = with_aliases(draft, report["aliases_to_add"].get(m["survivor"], []))
+        if m.get("rename"):
+            moves.append((m["survivor"], m["rename"]))
+        deletes.extend(m["absorbed"])
+    by_file = k.defaultdict(list)
+    for x in report["link_rewrites"]:
+        by_file[x["file"]].append(x)
+    for p, changes in by_file.items():
+        writes[p] = edited_text(text_of(corpus, p), changes)
+    for mv in mapping.get("moves", []):
+        moves.append((mv["from"], mv["to"]))
+        aliases = report["aliases_to_add"].get(mv["from"])
+        if aliases:
+            writes[mv["from"]] = with_aliases(writes.get(mv["from"], text_of(corpus, mv["from"])), aliases)
+    for p, text in writes.items():
+        k.safe_path(root, p).write_bytes(text.encode("utf-8"))
+    for p in deletes:
+        k.safe_path(root, p).unlink()
+    for src, dst in moves:
+        target = root / k.relative(dst)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(k.safe_path(root, src), target)
+    snapshot = k.Snapshot(root, "worktree")
+    rebuilt = k.Corpus(snapshot)
+    k.write_outputs(snapshot, rebuilt.outputs())
+    generated = [p for p in (".claude/index.md", ".claude/QUALITY.md", ".claude/index") if (root / p).exists()]
+    k.git(root, "add", "-A", "--", *report["touched"], *generated)
+    staged = sorted(os.fsdecode(x) for x in k.git(root, "diff", "--cached", "--name-only", "--no-renames", "-z").split(b"\0") if x)
+    return {**report, "applied": True, "changed": True, "written": sorted(writes), "deleted": sorted(deletes),
+            "moved": [{"from": a, "to": b} for a, b in moves], "staged": staged, "notes": len(rebuilt.notes),
+            "commit_message": commit_message(mapping, report)}
+
+
 def render(report):
     out = ["# Reorganization plan", ""]
     if report["errors"]:

@@ -176,9 +176,19 @@ Run 12 semantic health checks on the vault to detect contradictions, stale conte
 
 The 12 checks: (1) Contradictions, (2) Stale content, (3) Orphan pages, (4) Missing pages, (5) Weak links [fixable], (6) Concept gaps [fixable], (7) Cross-ref gaps [fixable], (8) Missing required-core section, (9) Body over 500-char budget, (10) Legacy `--preserve` artifacts [fixable], (11) Thesis chapter budget, (12) Dangling thesis back-link
 
-Checks 8–12 enforce the Concept-First and Hybrid Mode specs (see `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-thesis-mode.md`). Notes with `Date` before 2026-05-28 receive LOW severity for these checks; newer notes get the intrinsic severity.
+Checks 8–12 enforce the Concept-First and Hybrid Mode specs (see `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-thesis-mode.md`); Checks 8, 9 and 10 also know `Mode: clip` (`docs/ADR/0004-clip-mode-verbatim-notes.md`). Notes with `Date` before 2026-05-28 receive LOW severity for these checks; newer notes get the intrinsic severity.
 
-**Note modes** (ADR-0002). Every note declares `Mode: atom | thesis` in frontmatter. The modeler picks the mode per source: atom notes hold a single concept (≤ 500-char body); thesis notes carry a macro claim with supporting theme chapters (per-chapter 200–1500-char soft target). Completion reports show 🧬 Mode after the note location.
+**Note modes** (ADR-0002, ADR-0004). Every note declares `Mode: atom | thesis | clip` in frontmatter. The modeler picks atom or thesis per source: atom notes hold a single concept (≤ 500-char body); thesis notes carry a macro claim with supporting theme chapters (per-chapter 200–1500-char soft target). Clip notes (`Mode: clip`, from `/zkfy:clip-to-zk`) hold a source verbatim, with no body budget; Checks 9, 10 and 11 skip them. Completion reports show 🧬 Mode after the note location.
+
+#### `/zkfy:clip-to-zk` — File a Source Verbatim
+
+Keep a source exactly as captured instead of distilling it.
+
+```bash
+/zkfy:clip-to-zk <url | raw/clip.md | file | text | video> [domain] [--vault <root>]
+```
+
+It writes a `Mode: clip` note: the body is the source verbatim, with zkfy frontmatter, a Train-Case filename in a domain sub-folder, and a `### Links` section appended. Images are renamed to match the note. Backlinks to related notes are proposed, never applied without approval. The `raw/` copy is removed only after the new note passes verification and lint. It needs the `web-clipper` plugin command. One source per run. Design: `docs/ADR/0004-clip-mode-verbatim-notes.md`.
 
 #### `/vault-reorg` — Reorganize the vault
 
@@ -316,6 +326,7 @@ zkfy/
 │   ├── vault-index/             # Catalog generation via vault-knowledge build
 │   ├── vault-lint/              # 12 semantic health checks; fixes proposed, applied on approval
 │   ├── vault-reorg/             # Reorganization passes: interview, weave, unit ledger, apply
+│   ├── clip-to-zk/              # Verbatim clip notes (Mode: clip), with scripts/clip_note.py
 │   └── terminal-colors/         # Standardized output formatting
 ├── scripts/
 │   ├── knowledge.py             # Scoped vault CLI: search, read, build, lint, reorg

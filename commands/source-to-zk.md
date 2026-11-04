@@ -84,14 +84,14 @@ Otherwise: Mark task #2 as `deleted` (not needed)
 
 **Update task**: Mark "Extract video transcript" as `in_progress`
 
-**Read agent**: `~/.claude/agents/video-agent.md`
+**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
 ```
 Prompt: "You are delegated to act as the video-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/video-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md
 
 Then extract the transcript from this video URL: <video_url>
 
@@ -111,7 +111,7 @@ Return the path to the created transcript file."
 
 **Update task**: Mark "Generate structured Markdown" as `in_progress`
 
-**Read agent**: `~/.claude/agents/markdown-file-agent.md`
+**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md`
 **Read prompt**: `~/.claude/prompts/crawler.prompt.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
@@ -119,7 +119,7 @@ Use the Task tool to delegate to `general-purpose` subagent with:
 ```
 Prompt: "You are delegated to act as the markdown-file-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/markdown-file-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md
 Read the formatting rules at: ~/.claude/prompts/crawler.prompt.md
 
 Then convert this source to structured Markdown:
@@ -131,7 +131,7 @@ Requirements:
 - Web URL: clip it with the web-clipper plugin, a zkfy dependency (web-clipper "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
 - Text / transcript: output to raw/src-<title-kebab>.md
 - If the clipper exits 2 (bot challenge, login wall, paywall), stop and ask the user to save the page from their browser and rerun with --html <file>; do not substitute WebFetch or any scraper
-- For complex diagrams, you may sub-delegate to ~/.claude/agents/diagram-agent.md
+- For complex diagrams, you may sub-delegate to ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
 
 Return the path to the created Markdown file."
 ```
@@ -152,7 +152,7 @@ Use the `zk-note` skill to orchestrate the integration:
   3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
   4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
   5. Spinoff candidates — returned in the report only, never written to a file
-  6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay
+  6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay (except `clip-to-zk`, which adopts its own clip and removes the raw copy after verification)
 
 **On success**: Update task to `completed`, store results
 **On failure (domain unclear)**: Ask user to specify domain, then retry
@@ -169,7 +169,7 @@ After the new note is created, propose backlinks to existing related notes:
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/cross-pollinator-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note_path from Phase 2>

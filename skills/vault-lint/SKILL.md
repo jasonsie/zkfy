@@ -12,7 +12,7 @@ description: >-
 
 Detect contradictions, staleness, orphan pages, missing pages, weak links, concept gaps, and cross-reference gaps across the Obsidian ZK vault. Complements `vault-audit` (structural compliance) with semantic coherence checks.
 
-**Concept-First conformance** (Checks 8–10) enforces the spec defined in `docs/ADR/0001-concept-first-pipeline.md`. **Hybrid Mode conformance** (Checks 8 mode-branching, 9 atom-only, 11 thesis chapter budget, 12 dangling thesis back-link) enforces `docs/ADR/0002-hybrid-atom-thesis-mode.md`. Pre-adoption notes (`Date` < 2026-05-28) receive downgraded LOW severity per D10.
+**Concept-First conformance** (Checks 8–10) enforces the spec defined in `docs/ADR/0001-concept-first-pipeline.md`. **Hybrid Mode conformance** (Checks 8 mode-branching, 9 atom-only, 11 thesis chapter budget, 12 dangling thesis back-link) enforces `docs/ADR/0002-hybrid-atom-thesis-mode.md`. **Clip mode conformance** (Checks 8, 9, 10 skip or branch on `Mode: clip`) follows `docs/ADR/0004-clip-mode-verbatim-notes.md`. Pre-adoption notes (`Date` < 2026-05-28) receive downgraded LOW severity per D10.
 
 ## Scoped-vault override (check first)
 
@@ -47,8 +47,8 @@ For unconfigured vaults, the legacy semantic workflow below remains documentatio
 | 6 | **Concept gaps** | MEDIUM | Yes |
 | 7 | **Cross-ref gaps** | LOW | Yes |
 | 8 | **Missing required-core section (mode-aware)** | HIGH (post-ADR) / LOW (pre-ADR) | No |
-| 9 | **Body over 500-char budget (atom only)** | HIGH (post-ADR) / LOW (pre-ADR) | No |
-| 10 | **Legacy `--preserve` artifacts** | MEDIUM | Yes |
+| 9 | **Body over 500-char budget (atom only; skips thesis and clip)** | HIGH (post-ADR) / LOW (pre-ADR) | No |
+| 10 | **Legacy `--preserve` artifacts (skips clip)** | MEDIUM | Yes |
 | 11 | **Thesis chapter budget** | MEDIUM (post-adoption) / LOW (pre-adoption) | No |
 | 12 | **Dangling thesis back-link** | LOW | No |
 
@@ -233,19 +233,25 @@ Per ADR-0001 D5 (atom) and ADR-0002 D4 (thesis), every note must contain a mode-
 
 **Reserved heading names** (used to recognize non-theme sections in thesis mode): `Definition`, `Mental Model`, `Why It Matters`, `Boundary`, `Code`, `Links`, `執行摘要`, `附錄`. Any `### <heading>` not in this set is presumed to be a thesis chapter.
 
-**`Mode:` missing or invalid** — emit a finding with `detail` = `"Mode frontmatter field missing or invalid (must be atom or thesis)"`. Apply the severity-gating helper (pre-adoption → LOW; post-adoption → HIGH). For the remainder of Check 8, fall back to the atom required-core set so the rest of the validation still runs.
+**`Mode: clip`** — required-core section (per ADR-0004):
+- `### Links`
+
+A clip note is a verbatim source with `### Links` appended. It has no `### Definition`, `### Mental Model` or theme chapter, so none of those are required or flagged.
+
+**`Mode:` missing or invalid** — emit a finding with `detail` = `"Mode frontmatter field missing or invalid (must be atom, thesis or clip)"`. Apply the severity-gating helper (pre-adoption → LOW; post-adoption → HIGH). For the remainder of Check 8, fall back to the atom required-core set so the rest of the validation still runs.
 
 **Do NOT** flag missing `### Why It Matters`, `### Boundary`, or `### Code` in atom mode — these are agent-discretion optional sections per ADR-0001 D5. **Do NOT** flag missing `### 附錄` in thesis mode — it is optional per ADR-0002 D4. **Do NOT** flag presence of `### Boundary` / `### Code` in thesis mode — they are removed by D4 but lint tolerates them as legacy content rather than blocking.
 
 **Method:**
 1. For each note, read `note.frontmatter.Mode`.
-2. If missing or not one of `atom` / `thesis`, emit the missing-Mode finding (above) and continue with the atom required-core set.
+2. If missing or not one of `atom` / `thesis` / `clip`, emit the missing-Mode finding (above) and continue with the atom required-core set.
 3. Parse the markdown headings from the body.
 4. Determine the required-core set based on mode.
 5. For atom mode: check exact-match presence of each required-core heading (`### Definition`, `### Mental Model`, `### Links`).
-6. For thesis mode: check exact-match presence of `### 執行摘要`, `### Mental Model`, `### Links`; additionally, scan all `###` headings and confirm at least one is NOT in the reserved-names set. If none qualify, emit a finding with `detail` = `"Thesis note has no ### <Theme> chapter"`.
-7. For each missing required-core heading, emit a finding with `detail` = `"Missing required-core section: <section-name>"`.
-8. Apply the severity-gating helper: intrinsic severity is HIGH; pre-ADR notes downgrade to LOW.
+6. For clip mode: check exact-match presence of `### Links` only.
+7. For thesis mode: check exact-match presence of `### 執行摘要`, `### Mental Model`, `### Links`; additionally, scan all `###` headings and confirm at least one is NOT in the reserved-names set. If none qualify, emit a finding with `detail` = `"Thesis note has no ### <Theme> chapter"`.
+8. For each missing required-core heading, emit a finding with `detail` = `"Missing required-core section: <section-name>"`.
+9. Apply the severity-gating helper: intrinsic severity is HIGH; pre-ADR notes downgrade to LOW.
 
 **Not auto-fixable** — the modeler must regenerate these sections; lint can only detect.
 
@@ -253,11 +259,11 @@ Per ADR-0001 D5 (atom) and ADR-0002 D4 (thesis), every note must contain a mode-
 
 #### Check 9: Body over 500-char budget, atom only (HIGH post-ADR / LOW pre-ADR)
 
-Per ADR-0001 D4, ADR-0002 D5, and the CLAUDE.md "Body budget per mode" section, **atom-mode** notes have a hard ceiling of 500 characters on the body. **Thesis-mode** notes are exempt from this flat check (their per-chapter budget is enforced separately by Check 11).
+Per ADR-0001 D4, ADR-0002 D5, and the CLAUDE.md "Body budget per mode" section, **atom-mode** notes have a hard ceiling of 500 characters on the body. **Thesis-mode** notes are exempt from this flat check (their per-chapter budget is enforced separately by Check 11). **Clip-mode** notes are exempt too: the body is the source verbatim and has no budget (ADR-0004).
 
 The budget covers `### Definition`, `### Why It Matters`, `### Boundary`, and any prose surrounding diagrams or code.
 
-**Applies to:** notes with `Mode: atom`. **Skips:** notes with `Mode: thesis`. If `Mode` is missing, default to running Check 9 (treat as atom for backwards-compat with pre-Hybrid notes); Check 8 will flag the missing `Mode` separately.
+**Applies to:** notes with `Mode: atom`. **Skips:** notes with `Mode: thesis` or `Mode: clip`. If `Mode` is missing, default to running Check 9 (treat as atom for backwards-compat with pre-Hybrid notes); Check 8 will flag the missing `Mode` separately.
 
 **Count rule** — Chinese characters + English words.
 
@@ -268,7 +274,7 @@ The budget covers `### Definition`, `### Why It Matters`, `### Boundary`, and an
 - The `### Links` section (same approach)
 
 **Method:**
-1. Read `note.frontmatter.Mode`. If `thesis`, skip this check entirely (no finding). Otherwise (atom or missing), proceed.
+1. Read `note.frontmatter.Mode`. If `thesis` or `clip`, skip this check entirely (no finding). Otherwise (atom or missing), proceed.
 2. Strip frontmatter (top `---` block). If `note-scanner` already strips frontmatter and exposes a body slice, count on the body slice — this is the assumption Check 9 relies on; if scanner output changes, this check must be revisited.
 3. Strip fenced code blocks (everything between matching ` ``` ` lines, inclusive of the fence lines themselves).
 4. Skip the `### Mental Model` section entirely (from that heading to the next `###` heading or end of file).
@@ -287,6 +293,8 @@ The budget covers `### Definition`, `### Why It Matters`, `### Boundary`, and an
 #### Check 10: Legacy `--preserve` artifacts (MEDIUM)
 
 The `--preserve` mode is removed per ADR-0001 D5. Pre-existing notes may still carry artifacts from that era; flag them for a separately approved hand edit; there is no batch migration command (ADR-0005).
+
+**Applies to:** every note except `Mode: clip`. A clip note is a web page captured verbatim, and real pages contain `### Abstract` and `### Content` headings (ADR-0004). Skip the whole check for a clip note: no finding, no fix.
 
 **What constitutes a legacy artifact (any one match is sufficient to flag):**
 - A `### Abstract` heading (the old skeleton's first section — superseded by `### Definition`)
@@ -318,7 +326,7 @@ Per ADR-0002 D5, each `### <Theme>` chapter in a thesis-mode note has a **soft t
 
 The character calculation uses the same exclusion rules as ADR-0001 D4 / CLAUDE.md "Calculation rule" (Chinese characters + English words; exclude frontmatter, fenced code blocks, embedded diagrams, and the `### Links` section).
 
-**Applies to:** notes with `Mode: thesis`. **Skips:** notes with `Mode: atom` or missing `Mode`.
+**Applies to:** notes with `Mode: thesis`. **Skips:** notes with `Mode: atom`, `Mode: clip` or missing `Mode`.
 
 **Reserved heading names** (same set as Check 8): `Definition`, `Mental Model`, `Why It Matters`, `Boundary`, `Code`, `Links`, `執行摘要`, `附錄`. Any `### <heading>` not in this set is a theme chapter.
 
@@ -345,7 +353,7 @@ Per ADR-0002 D7 and D9, thesis chapters frequently emit `[[Wikilink]]` back-link
 
 For each `[[<target>]]` wikilink appearing inside a `### <Theme>` chapter (NOT in `### Links`, NOT in `### 執行摘要`, NOT in `### Mental Model`), verify the target exists as a file in the vault.
 
-**Applies to:** notes with `Mode: thesis`. **Skips:** notes with `Mode: atom` or missing `Mode`.
+**Applies to:** notes with `Mode: thesis`. **Skips:** notes with `Mode: atom`, `Mode: clip` or missing `Mode`.
 
 **Method:**
 1. Read `note.frontmatter.Mode`. If not `thesis`, skip this check entirely.

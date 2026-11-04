@@ -142,7 +142,7 @@ Apply these conversions:
 - **SVG**: Wrap in fenced `svg` code block
 - **Images**: `![alt](url)` format, keep original URLs
 - **Links**: Inline format `[text](url)`
-- **Diagrams**: Delegate to `~/.claude/agents/diagram-agent.md`
+- **Diagrams**: Delegate to `agents/diagram-agent.md` in this plugin (the folder this agent file was read from)
 
 ```bash
 echo -e "${GREEN}  ✓${RESET} 8 headings preserved"
@@ -195,7 +195,7 @@ echo -e "${DIM}  Size: 45 KB | Lines: 892 | Words: 5,234${RESET}"
 
 Every piece of source content MUST appear in the output.
 If content can't be cleanly converted to Markdown, preserve as raw HTML block.
-A web clip is the durable record of the page: downstream phases must never delete it.
+A web clip is the durable record of the page: downstream phases must never delete it (except `clip-to-zk`, which adopts its own clip and removes the raw copy after verification).
 
 ---
 

@@ -129,7 +129,7 @@ for Obsidian targets. This overrides any historical "use Mermaid for Obsidian" g
 
 1. **Image first** — if `source_image` is non-null, embed it and stop. Skip diagram generation.
 2. **ASCII by default** — for portability across rendering contexts (terminal, plain-text
-   export, non-Obsidian readers). Delegate to `~/.claude/agents/ascii-diagram-agent.md`.
+   export, non-Obsidian readers). Delegate to `agents/ascii-diagram-agent.md` in this plugin (the folder this agent file was read from).
 3. **Mermaid only when ASCII can't express the structure** — e.g., complex sequence diagrams
    with many lifelines, ER diagrams with cardinality notation, dense class hierarchies. If
    ASCII can render the shape cleanly, prefer ASCII.

@@ -74,7 +74,11 @@ echo -e "${CYAN}  → ${DIM}<new_note_path>${RESET}"
 Read the new note completely. Extract:
 - Concept name (from filename and `### Definition`)
 - Key claims (from `### Definition`, `### Why It Matters` if present, `### Boundary` if present)
-- Domain and Sub-Categories (from frontmatter)
+
+**`Mode: clip`** — a clip note is a verbatim source and has no `### Definition`. Read the concept from the frontmatter (`Aliases`, `Description`) and the filename, and the key claims from the first paragraphs of the body. Everything else in this agent is unchanged: it edits only `### Links` sections, and only as dry-run proposals.
+
+Extract the rest:
+- Domain and Sub-Categories (from frontmatter; a clip note may have no Sub-Categories)
 - Existing `### Links` section entries
 
 ```bash

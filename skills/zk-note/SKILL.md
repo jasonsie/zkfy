@@ -123,7 +123,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the zettelkasten-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/zettelkasten-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/zettelkasten-agent.md
 
 Then run the Discover layer on this source:
 Source file: <path>
@@ -155,7 +155,7 @@ Steps 4 and 5 — never re-derive it.
 ```
 Prompt: "You are delegated to act as the conceptual-modeler-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/conceptual-modeler-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/conceptual-modeler-agent.md
 
 Then run the Distill layer:
 discover_output: <full payload from Step 2>
@@ -206,7 +206,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the diagram-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/diagram-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
 
 Then render the Mental Model diagram for this concept:
 modality_hint: <conceptual_artifact.mental_model.modality_hint>
@@ -236,7 +236,7 @@ through verbatim — never re-derive it from payload shape.
 ```
 Prompt: "You are delegated to act as the obsidian-formatter-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/obsidian-formatter-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/obsidian-formatter-agent.md
 Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
 
 Then assemble the mode-appropriate note (atom skeleton per ADR-0001 D5 or thesis
@@ -291,7 +291,7 @@ to the new note:
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ~/.claude/agents/cross-pollinator-agent.md
+Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note path from Step 5>
@@ -310,7 +310,7 @@ If cross-pollination fails, warn but do not abort — the note is already create
 
 ### Step 7: Cleanup & Report
 
-Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`, nor a clip written by the `web-clipper` plugin (`raw/<Page Title>.md` and its attachment folder); they stay as provenance.
+Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`, nor a clip written by the `web-clipper` plugin (`raw/<Page Title>.md` and its attachment folder); they stay as provenance. The one exception is `clip-to-zk`, which adopts its own clip and removes the raw copy after verification (ADR-0004).
 
 Report completion (the `🧬 Mode` line is always present and reflects the modeler's
 classification; the `🪴 Spinoff candidates (not saved)` line is conditional on N > 0 and

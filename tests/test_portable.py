@@ -71,6 +71,39 @@ class PortableTest(unittest.TestCase):
         for name, server in claude.items():
             self.assertEqual(server["url"], agy[name].get("serverUrl") or agy[name].get("url"))
 
+    def test_antigravity_hooks_run_the_scripts_claude_runs_by_relative_path(self):
+        claude = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]
+        scripts = {Path(h["command"].strip('"')).name for entries in claude.values() for e in entries for h in e["hooks"]}
+        agy_tools = {"write_to_file", "replace_file_content", "multi_replace_file_content", "run_command",
+                     "view_file", "list_dir", "find_by_name", "grep_search"}
+        seen = set()
+        for group, events in json.loads((ROOT / "hooks.json").read_text()).items():
+            self.assertTrue(re.fullmatch(r"[a-z0-9-]+", group), group)
+            for event, entries in events.items():
+                if event == "enabled":
+                    continue
+                self.assertIn(event, ("PreToolUse", "PostToolUse"))
+                for entry in entries:
+                    self.assertTrue(set(entry["matcher"].split("|")) <= agy_tools, entry["matcher"])
+                    for h in entry["hooks"]:
+                        self.assertTrue(h["command"].startswith("./hooks/"), h["command"])
+                        self.assertNotIn("PLUGIN_ROOT", h["command"])
+                        script = ROOT / h["command"][2:]
+                        self.assertTrue(os.access(script, os.X_OK), script)
+                        seen.add(script.name)
+        self.assertTrue(seen)
+        self.assertTrue(seen <= scripts, seen - scripts)  # the same scripts; PostToolUse is Claude's channel only
+
+    def test_pi_extension_runs_the_same_scripts_and_registers_the_same_server(self):
+        text = (ROOT / "extensions/zkfy.ts").read_text(encoding="utf-8")
+        claude = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]
+        for script in {Path(h["command"].strip('"')).name for entries in claude.values() for e in entries for h in e["hooks"]}:
+            self.assertIn(f'"{script}"', text, script)
+        servers = json.loads((ROOT / ".mcp.json").read_text())["mcpServers"]
+        self.assertEqual(re.search(r'url: "([^"]+)"', text).group(1), servers["notion"]["url"])
+        self.assertIn("registerMcpServer(NOTION.name", text)
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", text)
+
     def test_bin_commands_are_executable_scripts(self):
         files = sorted((ROOT / "bin").iterdir())
         self.assertTrue(files)

@@ -85,15 +85,17 @@ All eight declare `model: inherit`; skills delegate by having a general subagent
 | `query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
 | `vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7,10, applied on approval] |
 | `vault-reorg` | [scope] [--job] | survey --> dialogs --> mapping --> weave or moves --> apply --> stage --> confirm commit |
-| `notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 (not in Pi: no plugin MCP server) |
+| `notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
 | `clip-to-zk` | URL, `raw/` clip, file, text, or video | dedupe --> capture --> Discover --> adopt --> `clip_note.py` --> verify --> delete raw copy --> cross-pollinate (proposals) --> lint + build. See `docs/ADR/0004-clip-mode-verbatim-notes.md` |
 
 ## Hooks
 
 | Event | Script | Purpose |
 |-------|--------|---------|
-| PreToolUse (Write/Edit .md) | `validate-zk-structure.sh` | Redirect notes to `/output` if vault structure invalid |
+| PreToolUse (Write/Edit .md) | `validate-zk-structure.sh` | A configured vault decides (deny for `raw/`); elsewhere redirect notes to `/output` if the vault structure is invalid |
 | PostToolUse (Write .md) | `signal-index-update.sh` | Remind about separate catalog maintenance after note writes (structure-based vault detection) |
+
+One script per event, three ways in: `hooks/hooks.json` (Claude Code and Codex, `"${CLAUDE_PLUGIN_ROOT}"` quoted), the root `hooks.json` (Antigravity: relative paths, the plugin root as cwd, `toolCall.args.TargetFile`; its PostToolUse returns nothing to the agent, so the reminder rides on the PreToolUse allow) and `extensions/zkfy.ts` (Pi: `tool_call` and `tool_result` around `write` and `edit`, in Claude Code's shape). Each script tells the two payload shapes apart by the `toolCall` key; `tests/test_hooks.py` and `tests/test_pi_extension.py` cover them.
 
 ## External Dependencies
 
@@ -108,7 +110,7 @@ All eight declare `model: inherit`; skills delegate by having a general subagent
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
 | `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.2`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html`. `clip-to-zk` uses `--adopt`, `--release` and `--unadopt` (2.2) |
-| Notion MCP server | `.mcp.json` (Claude Code, Codex), `mcp_config.json` (Antigravity) | notion-to-zk only |
+| Notion MCP server | `.mcp.json` (Claude Code, Codex), `mcp_config.json` (Antigravity), `extensions/zkfy.ts` (Pi) | notion-to-zk only |
 
 ## Error Handling
 
@@ -131,6 +133,8 @@ zkfy/
   .claude-plugin/plugin.json     # Plugin manifest (the one version)
   .antigravity-plugin/plugin.json # Antigravity's native manifest
   .mcp.json, mcp_config.json     # Notion MCP server: Claude Code and Codex; Antigravity
+  hooks.json                     # The hooks for Antigravity (relative paths, plugin root as cwd)
+  extensions/zkfy.ts             # Pi: the hooks around write and edit, and the Notion server
   bin/vault-knowledge            # The knowledge CLI on PATH (bind, unbind, knowledge.py commands)
   agents/                        # 8 agents, model: inherit
   skills/                        # 11 skills; the five entry points among them
@@ -140,5 +144,5 @@ zkfy/
     signal-index-update.sh       # Auto-index signal (vault detection)
   docs/agents/                   # Long-form detail an agent points at
   docs/CODEMAPS/                 # This codemap
-  tests/                         # unittest, incl. test_portable.py
+  tests/                         # unittest, incl. test_portable.py, test_hooks.py, test_pi_extension.py
 ```

@@ -1,5 +1,8 @@
 ---
+name: query-to-note
 description: "Promote a query answer or synthesis into a permanent Zettelkasten note. Files valuable explorations back into the vault."
+argument-hint: "<question>"
+disable-model-invocation: true
 ---
 
 # Query to Note
@@ -18,9 +21,11 @@ $ARGUMENTS — a question or topic to research and file as a permanent note. Exa
 
 You are an orchestrator that runs a multi-step pipeline with **progress tracking**. Read each agent/skill before delegating to it.
 
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
+
 ### Step 0: Initialize Task List
 
-Create a task list to track pipeline progress. Use TaskCreate to create these tasks:
+Create a task list to track pipeline progress. Use TaskCreate to create these tasks: Where the CLI has no task-list tool, keep the list in your reply.
 
 1. **Search vault for relevant notes**
    - Subject: "Search vault for relevant notes"
@@ -128,7 +133,7 @@ Any spinoff candidates are listed in the final report only; nothing is written t
 
 **Update task**: Mark "Cross-pollinate related notes" as `in_progress`
 
-Delegate to `cross-pollinator-agent`:
+Delegate to `<zkfy-root>/agents/cross-pollinator-agent.md` the way the `zk-note` skill does (a general subagent that reads the file, or this session where the CLI has none):
 
 - New note path from Step 3
 - Candidate notes from Step 1

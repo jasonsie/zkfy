@@ -1,5 +1,8 @@
 ---
+name: notion-to-zk
 description: "Create a Zettelkasten note from a Notion page via MCP integration"
+argument-hint: "<notion-page-url>"
+disable-model-invocation: true
 ---
 
 # Notion to Zettelkasten
@@ -38,9 +41,8 @@ After getting the URL, extract the page ID and fetch the page title using MCP to
 
 Before executing, verify:
 
-1. **MCP Configuration**: Notion MCP server enabled in `.claude/settings.local.json`
-2. **Authentication**: `NOTION_API_KEY` set in `.mcp.json`
-3. **Integration Access**: Your Notion integration connected to target page/database
+1. **MCP server**: the plugin's `notion` server is connected (`.mcp.json` in Claude Code and Codex, `mcp_config.json` in Antigravity). Pi loads no plugin MCP server yet, so this skill does not run there.
+2. **Integration access**: your Notion workspace has granted the integration access to the target page or database
 
 If prerequisites are not met, provide setup instructions and abort.
 
@@ -50,7 +52,7 @@ You are an orchestrator running a specialized pipeline for Notion content. Read 
 
 ### Step 0: Initialize Task List
 
-Create a task list to track pipeline progress:
+Create a task list to track pipeline progress: Where the CLI has no task-list tool, keep the list in your reply.
 
 1. **Validate Notion page access**
    - Subject: "Validate Notion page"
@@ -90,7 +92,7 @@ Use MCP tools to verify access:
 - `mcp__notion__retrieve-a-data-source` — verify read access
 
 **On failure (401/404)**: STOP workflow, provide troubleshooting:
-- Check token in `.mcp.json`
+- Check the `notion` MCP server's connection
 - Verify integration connection to page/database
 - Confirm read access permissions
 - Suggest opening page in Notion to test
@@ -166,7 +168,7 @@ Clean excessive whitespace (max 2 consecutive newlines).
 **Save to**: `raw/src-notion-<title-kebab-case>.md`
 
 **Error Handling**:
-- **401 Unauthorized**: STOP. Verify token, restart Claude Code
+- **401 Unauthorized**: STOP. Reconnect the `notion` server, restart the CLI
 - **404 Not Found**: STOP. Check URL and integration permissions
 - **429 Rate Limit**: Wait 5s, retry once, then abort
 - **Empty content**: SKIP Phase 2, notify user
@@ -228,7 +230,7 @@ Output:
 
 | Phase | Error                   | Action                                              |
 | ----- | ----------------------- | --------------------------------------------------- |
-| 0     | Authentication failed   | **STOP** — verify token, restart Claude Code        |
+| 0     | Authentication failed   | **STOP** — reconnect the notion server, restart CLI |
 | 0     | Page not found          | **STOP** — check URL and integration permissions    |
 | 0     | Rate limit exceeded     | Wait 5s, retry once, then abort                     |
 | 0     | Empty content           | **SKIP** Phase 2 — notify user                      |

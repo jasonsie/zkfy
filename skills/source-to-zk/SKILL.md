@@ -1,5 +1,8 @@
 ---
+name: source-to-zk
 description: "Complete pipeline from any source (URL, text, file) to an integrated Zettelkasten literature note"
+argument-hint: "<url | text | file>"
+disable-model-invocation: true
 ---
 
 # Source to Zettelkasten
@@ -20,7 +23,7 @@ You are an orchestrator that runs a multi-phase pipeline with **progress trackin
 
 ### Step 0: Initialize Task List
 
-Create a task list to track pipeline progress. Use TaskCreate to create these tasks:
+Create a task list to track pipeline progress. Use TaskCreate to create these tasks: Where the CLI has no task-list tool, keep the list in your reply.
 
 1. **Detect input type (video/web/text)**
    - Subject: "Detect input type"

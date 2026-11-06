@@ -11,7 +11,7 @@ tools:
   - Read
   - Grep
   - Glob
-model: sonnet
+model: inherit
 color: cyan
 mode: best-effort
 ---

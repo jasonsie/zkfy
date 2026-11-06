@@ -11,7 +11,7 @@ tools:
   - Bash
   - Read
   - Write
-model: sonnet
+model: inherit
 color: magenta
 mode: strict
 externalDependencies:

@@ -1,6 +1,6 @@
 ---
 name: zk-note
-description: Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Propose backlinks and MOC entries for the new note.
+description: "Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Propose backlinks and MOC entries for the new note."
 ---
 
 # ZK-Note

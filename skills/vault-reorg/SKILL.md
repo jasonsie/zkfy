@@ -1,6 +1,6 @@
 ---
 name: vault-reorg
-description: Reorganize the scoped Obsidian vault in one reviewed pass. Surveys candidate clusters first, then runs the job the user picks in a dialog: Consolidate (weave duplicate notes into one through a unit ledger), Restructure (moves, flattening, renames, map lines) or Curate (canonical-subtopic coverage; gaps become an ingest backlog). Use when the user asks to reorganize, consolidate, dedupe, merge or flatten vault notes, or runs /vault-reorg. Applies through `knowledge.py reorg`, stages its own files, and asks before committing.
+description: "Reorganize the scoped Obsidian vault in one reviewed pass. Surveys candidate clusters first, then runs the job the user picks in a dialog: Consolidate (weave duplicate notes into one through a unit ledger), Restructure (moves, flattening, renames, map lines) or Curate (canonical-subtopic coverage; gaps become an ingest backlog). Use when the user asks to reorganize, consolidate, dedupe, merge or flatten vault notes, or runs /vault-reorg. Applies through `knowledge.py reorg`, stages its own files, and asks before committing."
 ---
 
 # Vault reorg

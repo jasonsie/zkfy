@@ -14,7 +14,7 @@ tools:
   - Grep
   - Glob
   - Bash
-model: sonnet
+model: inherit
 color: green
 mode: best-effort
 externalDependencies:

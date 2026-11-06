@@ -1,6 +1,6 @@
 ---
 name: clip-to-zk
-description: File a source verbatim as a Mode clip vault note — URL, raw/ clip, video, file or text — with zkfy frontmatter, a Train-Case name, a domain folder and proposed backlinks.
+description: "File a source verbatim as a Mode clip vault note — URL, raw/ clip, video, file or text — with zkfy frontmatter, a Train-Case name, a domain folder and proposed backlinks."
 disable-model-invocation: true
 argument-hint: "<url | raw/<clip>.md | file | text | video-url> [domain] [--vault <root>]"
 ---

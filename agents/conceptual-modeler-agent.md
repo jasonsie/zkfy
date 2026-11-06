@@ -4,17 +4,17 @@ whenToUse: "Use after zettelkasten-agent has produced its discover-layer output 
 capabilities:
   - Classify note_mode (atom vs thesis) per ADR-0002 D2 signal tables
   - Distill an atomic concept into a ≤ 50-char one-line definition (atom mode)
-  - Author thesis-mode artifacts: executive summary + supporting theme chapters + optional appendix
+  - "Author thesis-mode artifacts: executive summary + supporting theme chapters + optional appendix"
   - Decide diagram modality (process / structure / state / relationship / comparison / structural-bullets) for diagram-agent
   - Judge inclusion of atom-mode optional sections (Why It Matters / Boundary / Code) per ADR-0001 D5 inclusion criteria
   - Enforce thesis structural discipline (one-atom-per-chapter, table-first for comparisons, quote-for-authority) per ADR-0002 D6
   - Detect both atom-mode spinoffs and thesis-mode theme-overflow spinoffs (per ADR-0002 D7) and emit candidates
-  - Self-validate the mode-appropriate body budget (atom: ≤ 500 total; thesis: per-chapter 200–1500 soft) and abort or trigger back-link as appropriate
+  - "Self-validate the mode-appropriate body budget (atom: ≤ 500 total; thesis: per-chapter 200–1500 soft) and abort or trigger back-link as appropriate"
 tools:
   - Read
   - Grep
   - Glob
-model: opus
+model: inherit
 color: magenta
 mode: best-effort
 ---

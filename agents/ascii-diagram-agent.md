@@ -10,7 +10,7 @@ capabilities:
 tools:
   - Read
   - Write
-model: sonnet
+model: inherit
 color: blue
 mode: best-effort
 ---

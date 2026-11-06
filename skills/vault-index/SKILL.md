@@ -1,6 +1,6 @@
 ---
 name: vault-index
-description: Deterministically rebuild or check the scoped vault catalog, bounded shards, content-fingerprint manifest, and structural health report. Explicit maintenance only; never run during a read-only query. Supports full or append requests through one shared generator.
+description: "Deterministically rebuild or check the scoped vault catalog, bounded shards, content-fingerprint manifest, and structural health report. Explicit maintenance only; never run during a read-only query. Supports full or append requests through one shared generator."
 ---
 
 # Vault Index — Deterministic Maintenance

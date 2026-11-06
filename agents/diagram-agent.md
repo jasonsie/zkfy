@@ -1,4 +1,5 @@
 ---
+name: diagram-agent
 description: "Render diagrams for Zettelkasten notes. Honors the Image > ASCII > Mermaid > Structural Bullets priority chain; consumes a modality_hint from conceptual-modeler-agent"
 whenToUse: "Use when a Mental Model diagram is needed. The conceptual-modeler-agent supplies a modality_hint and structured description; this agent renders in the highest-priority modality that succeeds."
 capabilities:

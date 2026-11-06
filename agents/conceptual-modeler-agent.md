@@ -1,4 +1,5 @@
 ---
+name: conceptual-modeler-agent
 description: "Distill layer of the 3-stage Zettelkasten pipeline. Takes the discover-layer output from zettelkasten-agent plus source content, classifies note_mode (atom vs thesis per ADR-0002), and produces the mode-appropriate conceptual model artifact (atom: one-line definition + optional why/boundary/code; thesis: executive summary + themes + optional appendix) plus mental model with modality hint, spinoff candidates, and a mode-aware char-budget self-check for obsidian-formatter-agent to assemble."
 whenToUse: "Use after zettelkasten-agent has produced its discover-layer output and before obsidian-formatter-agent assembles the final note. This agent classifies note_mode at the start of distillation, decides diagram modality, judges section inclusion per the chosen mode, authors thesis chapters when mode = thesis, detects atom-spinoffs and thesis-chapter-overflow spinoffs, and enforces the mode-appropriate body budget (500-char hard for atom; per-chapter 200–1500 soft for thesis)."
 capabilities:

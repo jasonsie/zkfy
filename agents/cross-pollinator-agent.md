@@ -1,4 +1,5 @@
 ---
+name: cross-pollinator-agent
 description: "Update existing vault notes with backlinks and cross-references when a new note is ingested. Enriches the knowledge graph by connecting new content to existing notes."
 whenToUse: "Use after a new ZK note is created to propagate backlinks to related existing notes. Called by source-to-zk Phase 2.5."
 capabilities:

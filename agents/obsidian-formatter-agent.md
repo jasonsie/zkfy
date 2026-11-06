@@ -1,4 +1,5 @@
 ---
+name: obsidian-formatter-agent
 description: "Format a Zettelkasten note for an Obsidian vault: filename, frontmatter, backlinks, suggested MOC entries, and file writing"
 whenToUse: "Use when analyzed content needs to be formatted as an Obsidian literature note and integrated into the vault structure"
 capabilities:

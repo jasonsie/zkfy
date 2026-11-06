@@ -1,4 +1,5 @@
 ---
+name: video-agent
 description: "Extract video transcripts and metadata using yt-dlp, producing clean Markdown files"
 whenToUse: "Use when a video URL needs to be converted into a text transcript for further processing"
 capabilities:

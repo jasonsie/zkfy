@@ -40,7 +40,7 @@ Source File
     │
     ▼
 ┌────────────────────────────────┐
-│  zettelkasten-agent (sonnet)   │  Discover layer
+│  zettelkasten-agent            │  Discover layer
 │  (atomic concept + metadata)   │
 │                                │
 │  → domain                      │
@@ -55,7 +55,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  conceptual-modeler-agent      │  Distill layer
-│  (opus — deep reasoning)       │
+│  (deep reasoning)              │
 │                                │
 │  → note_mode: atom | thesis    │ ◄── classified per ADR-0002 D2
 │                                │
@@ -81,7 +81,7 @@ Source File
            │ note_mode + mode-payload
            ▼
 ┌────────────────────────────────┐
-│  diagram-agent (sonnet)        │  Render utility
+│  diagram-agent                 │  Render utility
 │  (Image > ASCII > Mermaid >    │
 │   Structural Bullets)          │
 │                                │
@@ -91,7 +91,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  obsidian-formatter-agent      │  Integrate layer
-│  (sonnet — mechanical)         │
+│  (mechanical)                  │
 │                                │
 │  consumes note_mode (REQUIRED) │ ◄── branches skeleton on mode
 │  → Train-Case filename         │
@@ -106,7 +106,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  cross-pollinator-agent        │  Graph enrichment
-│  (sonnet — Dry run: true)      │
+│  (Dry run: true)               │
 │  → proposed backlinks, shown   │
 │    to the user for approval    │
 └──────────┬─────────────────────┘

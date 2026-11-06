@@ -118,10 +118,10 @@ Write the synthesis to a temporary file at `raw/synthesis-<topic-kebab>.md`.
 
 Use the `zk-note` skill to process it through the 4-agent Hybrid Atom/Thesis pipeline (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
 
-1. `zettelkasten-agent` (sonnet) — Discover: atomic concept, domain, metadata, related notes
-2. `conceptual-modeler-agent` (opus) — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
-3. `diagram-agent` (sonnet) — Render: Image > ASCII > Mermaid > Structural Bullets
-4. `obsidian-formatter-agent` (sonnet) — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
+1. `zettelkasten-agent` — Discover: atomic concept, domain, metadata, related notes
+2. `conceptual-modeler-agent` — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
+3. `diagram-agent` — Render: Image > ASCII > Mermaid > Structural Bullets
+4. `obsidian-formatter-agent` — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
 
 Any spinoff candidates are listed in the final report only; nothing is written to a file.
 

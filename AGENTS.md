@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five commands drive everything: `/source-to-zk` (ingest), `/clip-to-zk` (file a source verbatim), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check), `/vault-reorg` (reorganize). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
+zkfy is a plugin for Claude Code, Codex, Pi and Antigravity that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five user-invoked skills drive everything: `source-to-zk` (ingest), `clip-to-zk` (file a source verbatim), `query-to-note` (synthesize from existing notes), `vault-lint` (semantic health check), `vault-reorg` (reorganize); Claude Code shows them as `/zkfy:<name>`. Agent definitions live in `agents/`, skills in `skills/` — read those files for specifics rather than relying on this document. The rules that keep the plugin loading in all four CLIs are ai-dotfiles' `portable-plugin` skill; `tests/test_portable.py` checks them, and `agy plugin validate --strict` warns by design about `.mcp.json`, `hooks/hooks.json` and this file, which the other CLIs read.
 
 ## Scope clarification
 
@@ -13,9 +13,9 @@ See `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-the
 Note synthesis runs through three agents in order: **Discover → Distill → Integrate**.
 
 ```
-zettelkasten-agent (Discover, sonnet)
-  → conceptual-modeler-agent (Distill, opus)
-    → obsidian-formatter-agent (Integrate, sonnet)
+zettelkasten-agent (Discover)
+  → conceptual-modeler-agent (Distill)
+    → obsidian-formatter-agent (Integrate)
 ```
 
 - **zettelkasten-agent** identifies the atomic concept, picks the domain, classifies metadata (Categories / Sub-Categories / Aliases / tags), and discovers related notes. No distillation.

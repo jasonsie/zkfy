@@ -186,10 +186,10 @@ Clean excessive whitespace (max 2 consecutive newlines).
 Use the `zk-note` skill to orchestrate the integration:
 - Pass the staging file path from Phase 0
 - The skill drives the 4-agent Hybrid Atom/Thesis pipeline internally (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
-  1. `zettelkasten-agent` (sonnet, Discover) — atomic concept, domain, metadata, related notes
-  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
-  3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets
-  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly; generates filename; builds frontmatter (using the URL from `**URL**` field as `Src` — Notion-specific mapping orthogonal to the new `Mode:` field); writes `Mode: atom | thesis` (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
+  1. `zettelkasten-agent` (Discover) — atomic concept, domain, metadata, related notes
+  2. `conceptual-modeler-agent` (Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
+  3. `diagram-agent` (Render) — Image > ASCII > Mermaid > Structural Bullets
+  4. `obsidian-formatter-agent` (Integrate) — consumes `note_mode` and branches skeleton assembly; generates filename; builds frontmatter (using the URL from `**URL**` field as `Src` — Notion-specific mapping orthogonal to the new `Mode:` field); writes `Mode: atom | thesis` (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
   5. Spinoff candidates — returned in the report only, never written to a file
   6. Cleanup — deletes staging file
 

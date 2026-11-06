@@ -317,7 +317,7 @@ the primary concept's cascade, supporting evidence, examples, analogies, and voc
 in passing are not spinoffs. Apply the **necessity test** to each candidate: remove the concept
 from the primary note entirely (Definition, Mental Model, Why, Boundary); if the exposition no
 longer holds together, it is part of this atom, not a spinoff. The full rules and two worked
-examples are in `reference/conceptual-modeler-detail.md` in this plugin; read it when a source
+examples are in `docs/agents/conceptual-modeler-detail.md` in this plugin; read it when a source
 offers more than two candidates.
 
 #### 5b. Thesis-mode spinoff detection (note_mode = thesis)
@@ -424,7 +424,7 @@ passes one-atom-per-chapter, or every chapter stays under 200 chars (reclassify 
 `discover_output` lacks required fields. Warn (`⚠` in YELLOW) and continue when structural bullets
 yield a single component or the source has no extractable mental model: emit the definition or
 summary without a Mental Model, and diagram-agent receives an empty hint. The full table, with each
-message, is in `reference/conceptual-modeler-detail.md` in this plugin.
+message, is in `docs/agents/conceptual-modeler-detail.md` in this plugin.
 
 ---
 

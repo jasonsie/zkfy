@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-11 | Files scanned: 24 | Token estimate: ~1300 -->
+<!-- Generated: 2026-04-11, updated 2026-11-06 for the portable release | Token estimate: ~1400 -->
 
 # zkfy Plugin Codemap
 
@@ -16,13 +16,13 @@ INPUT (URL/video/text/file)
   v
 [Phase 2] zk-note skill orchestrates:
   |
-  +---> zettelkasten-agent (Opus)  --> analysis JSON
+  +---> zettelkasten-agent         --> analysis JSON
   |       atomic concept, domain (auto-discovered), metadata, Feynman text, relationships
   |
-  +---> obsidian-formatter-agent (Sonnet) --> final .md in vault
+  +---> obsidian-formatter-agent   --> final .md in vault
   |       filename, frontmatter (Before/Next empty), file write, suggested MOC entries (no MOC/neighbor edits)
   v
-[Phase 2.5] cross-pollinator-agent (Sonnet)
+[Phase 2.5] cross-pollinator-agent
   |       Dry run: propose backlinks to 5-10 existing related notes (+ suggested MOC entries)
   |       flag contradictions; apply only user-approved edits
   v
@@ -33,17 +33,17 @@ INPUT (URL/video/text/file)
 ### LLM Wiki Pattern — Three Core Operations
 
 ```
-Ingest:  /source-to-zk  → Phase 0-3 full pipeline
-Query:   /query-to-note  → [dedup check] → vault-knowledge search/read → synthesize → zk-note → cross-pollinate (proposals) → lint + build
-Lint:    /vault-lint      → semantic checks → [proposed fixes, applied on approval]
+Ingest:  source-to-zk   → Phase 0-3 full pipeline
+Query:   query-to-note  → [dedup check] → vault-knowledge search/read → synthesize → zk-note → cross-pollinate (proposals) → lint + build
+Lint:    vault-lint     → semantic checks → [proposed fixes, applied on approval]
 ```
 
 ### Vault Retrieval — Scoped CLI
 
 ```
-~/.local/bin/vault-knowledge search "<terms>" --limit N
+vault-knowledge search "<terms>" --limit N
   → ranked paths + headings + excerpts
-~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"
+vault-knowledge read "<path>" --heading "<Heading>"
   → actual section text (cite before claiming)
 ```
 
@@ -51,15 +51,18 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 
 ## Agents
 
-| Agent | Model | Purpose | Key I/O |
-|-------|-------|---------|---------|
-| `video-agent` | default | Extract video transcripts | URL --> transcript markdown |
-| `markdown-file-agent` | default | Capture + convert to markdown | URL --> `raw/<Page Title>.md` via the `web-clipper` plugin; text/transcript --> `raw/src-*.md` |
-| `diagram-agent` | default | Mermaid diagrams for Obsidian | concept --> mermaid code block |
-| `ascii-diagram-agent` | default | ASCII diagrams for plain-text | concept --> ASCII art |
-| `zettelkasten-agent` | Opus | Deep content analysis | source markdown --> analysis (concept, domain, metadata, links) |
-| `obsidian-formatter-agent` | Sonnet | Vault formatting + integration | analysis --> final note file + suggested MOC entries |
-| `cross-pollinator-agent` | Sonnet | Knowledge graph enrichment | new note + candidates --> proposed backlinks (dry run); applied only after user approval |
+All eight declare `model: inherit`; skills delegate by having a general subagent read the agent file (or do the work in the session where the CLI has no subagents).
+
+| Agent | Purpose | Key I/O |
+|-------|---------|---------|
+| `video-agent` | Extract video transcripts | URL --> transcript markdown |
+| `markdown-file-agent` | Capture + convert to markdown | URL --> `raw/<Page Title>.md` via the `web-clipper` plugin; text/transcript --> `raw/src-*.md` |
+| `diagram-agent` | Diagrams: Image > ASCII > Mermaid > Structural Bullets | modality hint --> diagram block |
+| `ascii-diagram-agent` | ASCII diagrams for plain-text | concept --> ASCII art |
+| `zettelkasten-agent` | Discover layer | source markdown --> analysis (concept, domain, metadata, links) |
+| `conceptual-modeler-agent` | Distill layer (detail in `docs/agents/conceptual-modeler-detail.md`) | analysis --> mode-aware conceptual artifact |
+| `obsidian-formatter-agent` | Vault formatting + integration | artifact --> final note file + suggested MOC entries |
+| `cross-pollinator-agent` | Knowledge graph enrichment | new note + candidates --> proposed backlinks (dry run); applied only after user approval |
 
 ## Skills
 
@@ -68,20 +71,22 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `zk-note/` | Orchestrates zettelkasten-agent + obsidian-formatter-agent pipeline |
 | `query/` | Read-only vault queries via `vault-knowledge search` / `read` |
 | `vault-index/` | Catalog generation: `.claude/index.md` and related files are produced only by `vault-knowledge build` |
-| `vault-lint/` | 12 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps (1-7), plus Concept-First / Hybrid Mode / clip-aware conformance (8-12). Fixes for 5-7 and 10 proposed, applied on user approval |
+| `vault-lint/` | 12 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps (1-7), plus Concept-First / Hybrid Mode / clip-aware conformance (8-12); methods in `references/checks.md`. Fixes for 5-7 and 10 proposed, applied on user approval |
+| `vault-reorg/` | Reorganization passes: survey, dialogs, mapping, weave with a unit ledger, apply |
 | `clip-to-zk/` | Files a source verbatim as a `Mode: clip` note (`scripts/clip_note.py` does the exact steps); not part of the 3-stage pipeline |
 | `terminal-colors/` | Standardized ANSI color codes for agent output |
 | `x-learn-study-sop/` | 4-phase study SOP: checkpoint, RAG extraction, parallel impl, commit |
 
-## Commands
+## Entry-point skills (user-invoked; `/zkfy:<name>` in Claude Code)
 
-| Command | Trigger | Pipeline Steps |
-|---------|---------|----------------|
-| `/source-to-zk` | URL, text, or file path | Detect type --> [Phase 0] --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 Validate (mandatory) |
-| `/query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
-| `/vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7, applied on approval] |
-| `/notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
-| `/zkfy:clip-to-zk` | URL, `raw/` clip, file, text, or video | dedupe --> capture --> Discover --> adopt --> `clip_note.py` --> verify --> delete raw copy --> cross-pollinate (proposals) --> lint + build. See `docs/ADR/0004-clip-mode-verbatim-notes.md` |
+| Skill | Trigger | Pipeline Steps |
+|-------|---------|----------------|
+| `source-to-zk` | URL, text, or file path | Detect type --> [Phase 0] --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 Validate (mandatory) |
+| `query-to-note` | Natural language question | [Step 0.5 dedup] --> vault-knowledge search/read --> synthesize --> zk-note --> cross-pollinate (proposals) --> lint + build |
+| `vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7,10, applied on approval] |
+| `vault-reorg` | [scope] [--job] | survey --> dialogs --> mapping --> weave or moves --> apply --> stage --> confirm commit |
+| `notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 (not in Pi: no plugin MCP server) |
+| `clip-to-zk` | URL, `raw/` clip, file, text, or video | dedupe --> capture --> Discover --> adopt --> `clip_note.py` --> verify --> delete raw copy --> cross-pollinate (proposals) --> lint + build. See `docs/ADR/0004-clip-mode-verbatim-notes.md` |
 
 ## Hooks
 
@@ -103,7 +108,7 @@ Read-only and scoped by the vault's `docs/knowledge/scope.json`; `raw/` is exclu
 | `.claude/log.md` | Target vault | Frozen history, no longer written |
 | `.claude/index.md` | Target vault | Generated only by `vault-knowledge build` |
 | `web-clipper` plugin | Dependency (`web-clipper@web-clipper-marketplace`, `^2.2`); provides the `web-clipper` command | URL sources; exit 2 means save the page from a browser and rerun with `--html`. `clip-to-zk` uses `--adopt`, `--release` and `--unadopt` (2.2) |
-| Notion MCP server | `.claude/settings.local.json` | /notion-to-zk only |
+| Notion MCP server | `.mcp.json` (Claude Code, Codex), `mcp_config.json` (Antigravity) | notion-to-zk only |
 
 ## Error Handling
 
@@ -123,14 +128,17 @@ All skills default to `.` (cwd). Domain folders are auto-discovered by scanning 
 
 ```
 zkfy/
-  .claude-plugin/plugin.json     # Plugin manifest
-  commands/                      # 5 slash commands
-  agents/                        # 7 specialized agents
-  skills/                        # 7 reusable skill modules
+  .claude-plugin/plugin.json     # Plugin manifest (the one version)
+  .antigravity-plugin/plugin.json # Antigravity's native manifest
+  .mcp.json, mcp_config.json     # Notion MCP server: Claude Code and Codex; Antigravity
+  bin/vault-knowledge            # The knowledge CLI on PATH (bind, unbind, knowledge.py commands)
+  agents/                        # 8 agents, model: inherit
+  skills/                        # 11 skills; the five entry points among them
   hooks/
-    hooks.json                   # PreToolUse + PostToolUse hooks
+    hooks.json                   # PreToolUse + PostToolUse hooks (Claude Code, Codex)
     validate-zk-structure.sh     # ZK structure validation
     signal-index-update.sh       # Auto-index signal (vault detection)
-  reference/                     # Reference docs (hookify, llm-wiki)
+  docs/agents/                   # Long-form detail an agent points at
   docs/CODEMAPS/                 # This codemap
+  tests/                         # unittest, incl. test_portable.py
 ```

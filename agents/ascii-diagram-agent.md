@@ -1,4 +1,5 @@
 ---
+name: ascii-diagram-agent
 description: "Create, convert, or enhance diagrams using Unicode box-drawing characters and ASCII art"
 whenToUse: "Use when diagrams are needed for plain-text environments (terminal, code comments, txt files) or when Mermaid rendering is unavailable"
 capabilities:
@@ -10,7 +11,7 @@ capabilities:
 tools:
   - Read
   - Write
-model: sonnet
+model: inherit
 color: blue
 mode: best-effort
 ---

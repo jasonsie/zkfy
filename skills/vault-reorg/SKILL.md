@@ -1,6 +1,6 @@
 ---
 name: vault-reorg
-description: Reorganize the scoped Obsidian vault in one reviewed pass. Surveys candidate clusters first, then runs the job the user picks in a dialog: Consolidate (weave duplicate notes into one through a unit ledger), Restructure (moves, flattening, renames, map lines) or Curate (canonical-subtopic coverage; gaps become an ingest backlog). Use when the user asks to reorganize, consolidate, dedupe, merge or flatten vault notes, or runs /vault-reorg. Applies through `knowledge.py reorg`, stages its own files, and asks before committing.
+description: "Reorganize the scoped Obsidian vault in one reviewed pass. Surveys candidate clusters first, then runs the job the user picks in a dialog: Consolidate (weave duplicate notes into one through a unit ledger), Restructure (moves, flattening, renames, map lines) or Curate (canonical-subtopic coverage; gaps become an ingest backlog). Use when the user asks to reorganize, consolidate, dedupe, merge or flatten vault notes, or runs /vault-reorg. Applies through `knowledge.py reorg`, stages its own files, and asks before committing."
 ---
 
 # Vault reorg
@@ -18,7 +18,8 @@ Every file a pass writes has its format in [references/formats.md](references/fo
 1. The working directory holds `docs/knowledge/scope.json`. Otherwise stop: run `/vault-reorg` from
    the vault root.
 2. The CLI, with the vault path quoted (it may hold spaces):
-   `CLI="python3 -B ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/zkfy}/scripts/knowledge.py --vault \"$PWD\""`
+   `CLI="python3 -B <zkfy-root>/scripts/knowledge.py --vault \"$PWD\""`, where `<zkfy-root>` is this
+   plugin's root, two levels above the folder this SKILL.md was loaded from.
 3. The pass folder is `docs/plans/reorg/<YYYY-MM-DD>-<slug>/` inside the vault. `docs/` is outside the
    knowledge scope, so nothing written there becomes a note. Create it once the scope is known.
 4. Arguments: `/vault-reorg [<scope>] [--job survey|consolidate|restructure|curate]`. A given scope or
@@ -149,4 +150,5 @@ For each duplicate cluster in the scope:
 - Woven notes keep the legacy profile. `/zk-note` and the modeler never run inside a pass.
 - One scope per pass; the mapping is approved as a whole; changes to the woven text are named in the
   ledger dialog.
-- Subagents used for drafting each get their own scratch directory and never run another's script.
+- Subagents used for drafting each get their own scratch directory and never run another's script; in
+  a CLI without subagents, draft in the session.

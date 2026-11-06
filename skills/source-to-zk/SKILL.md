@@ -1,5 +1,8 @@
 ---
+name: source-to-zk
 description: "Complete pipeline from any source (URL, text, file) to an integrated Zettelkasten literature note"
+argument-hint: "<url | text | file>"
+disable-model-invocation: true
 ---
 
 # Source to Zettelkasten
@@ -16,9 +19,11 @@ The Concept-First pipeline (see `docs/ADR/0001-concept-first-pipeline.md`) is th
 
 You are an orchestrator that runs a multi-phase pipeline with **progress tracking**. Read each agent file before delegating to it.
 
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
+
 ### Step 0: Initialize Task List
 
-Create a task list to track pipeline progress. Use TaskCreate to create these tasks:
+Create a task list to track pipeline progress. Use TaskCreate to create these tasks: Where the CLI has no task-list tool, keep the list in your reply.
 
 1. **Detect input type (video/web/text)**
    - Subject: "Detect input type"
@@ -84,14 +89,14 @@ Otherwise: Mark task #2 as `deleted` (not needed)
 
 **Update task**: Mark "Extract video transcript" as `in_progress`
 
-**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md`
+**Read agent**: `<zkfy-root>/agents/video-agent.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
 ```
 Prompt: "You are delegated to act as the video-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md
+Read the agent instructions at: <zkfy-root>/agents/video-agent.md
 
 Then extract the transcript from this video URL: <video_url>
 
@@ -111,7 +116,7 @@ Return the path to the created transcript file."
 
 **Update task**: Mark "Generate structured Markdown" as `in_progress`
 
-**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md`
+**Read agent**: `<zkfy-root>/agents/markdown-file-agent.md`
 **Read prompt**: `~/.claude/prompts/crawler.prompt.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
@@ -119,7 +124,7 @@ Use the Task tool to delegate to `general-purpose` subagent with:
 ```
 Prompt: "You are delegated to act as the markdown-file-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md
+Read the agent instructions at: <zkfy-root>/agents/markdown-file-agent.md
 Read the formatting rules at: ~/.claude/prompts/crawler.prompt.md
 
 Then convert this source to structured Markdown:
@@ -131,7 +136,7 @@ Requirements:
 - Web URL: clip it with the web-clipper plugin, a zkfy dependency (web-clipper "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
 - Text / transcript: output to raw/src-<title-kebab>.md
 - If the clipper exits 2 (bot challenge, login wall, paywall), stop and ask the user to save the page from their browser and rerun with --html <file>; do not substitute WebFetch or any scraper
-- For complex diagrams, you may sub-delegate to ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
+- For complex diagrams, you may sub-delegate to <zkfy-root>/agents/diagram-agent.md
 
 Return the path to the created Markdown file."
 ```
@@ -147,10 +152,10 @@ Return the path to the created Markdown file."
 Use the `zk-note` skill to orchestrate the integration:
 - Pass the source file path from Phase 1
 - The skill drives the 4-agent Hybrid Atom/Thesis pipeline internally (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for the mode branching):
-  1. `zettelkasten-agent` (sonnet, Discover) — atomic concept, domain, metadata, related notes
-  2. `conceptual-modeler-agent` (opus, Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches its output skeleton: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
-  3. `diagram-agent` (sonnet, Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
-  4. `obsidian-formatter-agent` (sonnet, Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
+  1. `zettelkasten-agent` (Discover) — atomic concept, domain, metadata, related notes
+  2. `conceptual-modeler-agent` (Distill) — classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches its output skeleton: atom → one-line definition + optional Why/Boundary/Code (≤500-char body budget); thesis → executive summary + theme chapters + optional appendix (per-chapter 200–1500-char soft target). Emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
+  3. `diagram-agent` (Render) — Image > ASCII > Mermaid > Structural Bullets per CLAUDE.md (modality routing unchanged across modes)
+  4. `obsidian-formatter-agent` (Integrate) — consumes `note_mode` and branches skeleton assembly accordingly; writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
   5. Spinoff candidates — returned in the report only, never written to a file
   6. Cleanup — deletes only intermediate files this run created (`raw/src-*.md`); web clips (`raw/<Page Title>.md` + attachments) and user-dropped `raw/` sources stay (except `clip-to-zk`, which adopts its own clip and removes the raw copy after verification)
 
@@ -163,13 +168,13 @@ Use the `zk-note` skill to orchestrate the integration:
 
 After the new note is created, propose backlinks to existing related notes:
 
-1. Run `~/.local/bin/vault-knowledge search "<new note's concept terms>" --limit 10`, then `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"` on promising results
+1. Run `vault-knowledge search "<new note's concept terms>" --limit 10`, then `vault-knowledge read "<path>" --heading "<Heading>"` on promising results
 2. Delegate to `cross-pollinator-agent`:
 
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
+Read the agent instructions at: <zkfy-root>/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note_path from Phase 2>
@@ -191,8 +196,8 @@ Present the proposed edits plus the suggested MOC entries from Phase 2 (MOC path
 
 Phase 3 is **mandatory** — do not skip even if earlier phases had warnings.
 
-1. Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files
-2. Run `~/.local/bin/vault-knowledge build` to regenerate the catalog
+1. Run `vault-knowledge lint` and report violations touching the new or edited files
+2. Run `vault-knowledge build` to regenerate the catalog
 
 **On success**: Update task to `completed`
 **On failure**: Report the error to the user. Do NOT mark the pipeline as fully successful.

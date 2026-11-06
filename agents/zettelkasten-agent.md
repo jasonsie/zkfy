@@ -1,4 +1,5 @@
 ---
+name: zettelkasten-agent
 description: "TRIGGER when user says: 'take note', 'analyze', 'deep analysis', 'summarize deeply', 'deep summary', 'deep dive'. Discover layer of the 3-stage Zettelkasten pipeline: atomic concept identification, domain selection, metadata classification, and related-notes discovery. Distillation happens downstream in conceptual-modeler-agent."
 whenToUse: "Use when user says 'take note', 'analyze', 'deep analysis', 'summarize deeply', 'deep summary', or 'deep dive'. Source content can be a file path OR raw pasted text. Returns the atomic concept name, domain, metadata, key insights, and related notes — without distilling the source. Downstream conceptual-modeler-agent consumes this output."
 capabilities:
@@ -11,7 +12,7 @@ tools:
   - Read
   - Grep
   - Glob
-model: sonnet
+model: inherit
 color: cyan
 mode: best-effort
 ---

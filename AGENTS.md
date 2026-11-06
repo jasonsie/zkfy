@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-zkfy is a Claude Code plugin that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five commands drive everything: `/source-to-zk` (ingest), `/clip-to-zk` (file a source verbatim), `/query-to-note` (synthesize from existing notes), `/vault-lint` (semantic health check), `/vault-reorg` (reorganize). Agent definitions live in `agents/`, skill modules in `skills/` — read those files for specifics rather than relying on this document.
+zkfy is a plugin for Claude Code, Codex, Pi and Antigravity that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five user-invoked skills drive everything: `source-to-zk` (ingest), `clip-to-zk` (file a source verbatim), `query-to-note` (synthesize from existing notes), `vault-lint` (semantic health check), `vault-reorg` (reorganize); Claude Code shows them as `/zkfy:<name>`. Agent definitions live in `agents/`, skills in `skills/` — read those files for specifics rather than relying on this document. The rules that keep the plugin loading in all four CLIs are ai-dotfiles' `portable-plugin` skill; `tests/test_portable.py` checks them, and `agy plugin validate --strict` warns by design about `.mcp.json`, `hooks/hooks.json` and this file, which the other CLIs read.
 
 ## Scope clarification
 
@@ -13,9 +13,9 @@ See `docs/ADR/0001-concept-first-pipeline.md` and `docs/ADR/0002-hybrid-atom-the
 Note synthesis runs through three agents in order: **Discover → Distill → Integrate**.
 
 ```
-zettelkasten-agent (Discover, sonnet)
-  → conceptual-modeler-agent (Distill, opus)
-    → obsidian-formatter-agent (Integrate, sonnet)
+zettelkasten-agent (Discover)
+  → conceptual-modeler-agent (Distill)
+    → obsidian-formatter-agent (Integrate)
 ```
 
 - **zettelkasten-agent** identifies the atomic concept, picks the domain, classifies metadata (Categories / Sub-Categories / Aliases / tags), and discovers related notes. No distillation.
@@ -33,13 +33,13 @@ Two prompt files must exist outside this repo or the relevant agents abort:
 - `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
 - `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
 
-Skills and commands reference agent files as `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the plugin's install directory when it loads skill, command and agent content (plugins/components.md "Path variables"). A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
+Skills name bundled files from the plugin root as `<zkfy-root>/<path>`, where `<zkfy-root>` is two levels above the skill's folder; the skill resolves it before delegating. Only Claude Code would fill in `${CLAUDE_PLUGIN_ROOT}` in skill text (Codex only in hook commands, Pi and Antigravity never), so skill text never uses it. `hooks/hooks.json` keeps `"${CLAUDE_PLUGIN_ROOT}"`, quoted: Claude and Codex fill it for hook commands. A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
 
 ## Vault contract
 
 Scoped knowledge retrieval and maintenance use `scripts/knowledge.py` and require an explicit `--vault` plus `docs/knowledge/scope.json`. The `query` skill is read-only; `query-to-note` is a separate explicitly requested write workflow. The shared CLI runs in Pi or Claude Code without Claude-only APIs. See `docs/ADR/0003-scoped-knowledge-record.md`.
 
-Do not infer a knowledge vault from the current project directory. The installed `vault-knowledge` launcher supplies a machine-local binding. All scoped reads, link expansion, indexing, and health reports share the allowlist, exclude `raw/` completely, and reject symlink/traversal paths. Do not add per-skill exclusion lists or whole-vault fallback scans. MOCs are optional navigation, not coverage gates.
+Do not infer a knowledge vault from the current project directory. The `vault-knowledge` command (`bin/vault-knowledge`, on PATH through Claude Code's plugin bin/ and through the link ai-dotfiles makes in `~/.local/bin`) runs `scripts/knowledge.py` from its own checkout against the vault in the machine-local binding, `~/.config/zkfy/knowledge.json`; `vault-knowledge bind --vault <vault>` writes it. All scoped reads, link expansion, indexing, and health reports share the allowlist, exclude `raw/` completely, and reject symlink/traversal paths. Do not add per-skill exclusion lists or whole-vault fallback scans. MOCs are optional navigation, not coverage gates.
 
 `.claude/index.md` and related catalog files (`.claude/index/`, `.claude/QUALITY.md`, manifest) are generated only by `vault-knowledge build`. Never hand-edit them. `.claude/log.md` is frozen history and is no longer written. Existing notes, MOCs, and neighbor navigation are never edited automatically; ingest prompts return proposals (including `cross-pollinator-agent` with `Dry run: true`) that the user approves.
 
@@ -107,7 +107,7 @@ Clip notes (`Mode: clip`) do not follow this block. They carry the vault's minim
 ## Agent delegation pattern
 
 <important if="writing or modifying an agent">
-Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read the agent file (`${CLAUDE_PLUGIN_ROOT}/agents/<name>.md` in skills and commands; the sibling `agents/<name>.md` path in agent files). The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
+Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read the agent file (`<zkfy-root>/agents/<name>.md` in skills, resolved to an absolute path; the sibling `agents/<name>.md` path in agent files). In a CLI without subagents (Pi), the skill reads the agent file and does its work in the session. The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
 </important>
 
 ## Error handling decisions (not negotiable)

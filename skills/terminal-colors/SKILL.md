@@ -1,6 +1,6 @@
 ---
 name: terminal-colors
-description: Standardized bash terminal color formatting for agent output. Use when creating or updating agent prompts that need colored terminal output for progress indicators, success/error messages, file paths, or structured logging. Provides consistent color palette and usage patterns across all agents.
+description: "Standardized bash terminal color formatting for agent output. Use when creating or updating agent prompts that need colored terminal output for progress indicators, success/error messages, file paths, or structured logging. Provides consistent color palette and usage patterns across all agents."
 ---
 
 # Terminal Colors

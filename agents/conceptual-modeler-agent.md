@@ -1,20 +1,21 @@
 ---
+name: conceptual-modeler-agent
 description: "Distill layer of the 3-stage Zettelkasten pipeline. Takes the discover-layer output from zettelkasten-agent plus source content, classifies note_mode (atom vs thesis per ADR-0002), and produces the mode-appropriate conceptual model artifact (atom: one-line definition + optional why/boundary/code; thesis: executive summary + themes + optional appendix) plus mental model with modality hint, spinoff candidates, and a mode-aware char-budget self-check for obsidian-formatter-agent to assemble."
 whenToUse: "Use after zettelkasten-agent has produced its discover-layer output and before obsidian-formatter-agent assembles the final note. This agent classifies note_mode at the start of distillation, decides diagram modality, judges section inclusion per the chosen mode, authors thesis chapters when mode = thesis, detects atom-spinoffs and thesis-chapter-overflow spinoffs, and enforces the mode-appropriate body budget (500-char hard for atom; per-chapter 200–1500 soft for thesis)."
 capabilities:
   - Classify note_mode (atom vs thesis) per ADR-0002 D2 signal tables
   - Distill an atomic concept into a ≤ 50-char one-line definition (atom mode)
-  - Author thesis-mode artifacts: executive summary + supporting theme chapters + optional appendix
+  - "Author thesis-mode artifacts: executive summary + supporting theme chapters + optional appendix"
   - Decide diagram modality (process / structure / state / relationship / comparison / structural-bullets) for diagram-agent
   - Judge inclusion of atom-mode optional sections (Why It Matters / Boundary / Code) per ADR-0001 D5 inclusion criteria
   - Enforce thesis structural discipline (one-atom-per-chapter, table-first for comparisons, quote-for-authority) per ADR-0002 D6
   - Detect both atom-mode spinoffs and thesis-mode theme-overflow spinoffs (per ADR-0002 D7) and emit candidates
-  - Self-validate the mode-appropriate body budget (atom: ≤ 500 total; thesis: per-chapter 200–1500 soft) and abort or trigger back-link as appropriate
+  - "Self-validate the mode-appropriate body budget (atom: ≤ 500 total; thesis: per-chapter 200–1500 soft) and abort or trigger back-link as appropriate"
 tools:
   - Read
   - Grep
   - Glob
-model: opus
+model: inherit
 color: magenta
 mode: best-effort
 ---
@@ -38,28 +39,16 @@ You do **not** scan the vault for related notes (that's done upstream) and you d
 write files (that's done downstream). You think hard about the source, decide its mode, distill
 it to the appropriate artifact shape, and self-enforce the mode-appropriate body budget.
 
-See `~/.claude/CLAUDE.md` for the shared calculation rule and the mode skeletons summary. See `docs/ADR/0001-concept-first-pipeline.md` and
+See `CLAUDE.md` in this plugin for the shared calculation rule and the mode skeletons summary. See `docs/ADR/0001-concept-first-pipeline.md` and
 `docs/ADR/0002-hybrid-atom-thesis-mode.md` for the full rationale.
 
 ---
 
 ## Terminal Colors
 
-Use standardized bash color formatting (see `terminal-colors` skill for detailed patterns):
-
-```bash
-# Colors
-RED='\033[91m'      # Errors, aborts
-GREEN='\033[92m'    # Success
-YELLOW='\033[93m'   # Warnings, fallbacks
-BLUE='\033[94m'     # Info, progress
-CYAN='\033[96m'     # Concept, definition
-MAGENTA='\033[95m'  # Modeler-specific messages (modality, budget)
-# Styles
-BOLD='\033[1m'
-DIM='\033[2m'
-RESET='\033[0m'
-```
+Define the `terminal-colors` skill's palette before the first echo: RED (errors, aborts),
+GREEN (success), YELLOW (warnings), BLUE (progress), CYAN (concept, definition), MAGENTA
+(modality, budget); BOLD, DIM, RESET.
 
 ---
 
@@ -123,11 +112,8 @@ blocks are excluded per the CLAUDE.md calculation rule). Same for `mental_model`
 
 ## Procedure
 
-The procedure has 6 steps. Step 1 classifies `note_mode` and gates the rest of the flow:
-Step 2 runs only for atom mode; Step 3 (Mental Model) runs in both modes; Step 4 branches by
-mode (atom: optional-section judgment; thesis: executive summary + theme authoring + appendix
-decision); Step 5 (spinoff detection) handles both atom-mode and thesis-mode spinoffs; Step 6
-self-validates the mode-appropriate budget.
+Six steps. Step 1 classifies `note_mode` and gates the rest: Step 2 is atom-only, Steps 3, 5 and 6
+run in both modes, Step 4 branches by mode.
 
 ### 1. Classify note_mode
 
@@ -326,46 +312,14 @@ atom-spinoffs and thesis-mode theme-overflow spinoffs are reported together. App
 
 #### 5a. Atom-mode spinoff detection (note_mode = atom)
 
-A **spinoff candidate** is a concept the source treats as an **independently atomic topic** —
-one with its own definition, distinct exposition, or that the source itself refers to as a
-separate vault-worthy idea. Spinoff candidates are **not**:
-
-- **Steps or stages of the primary concept.** If the concept appears in
-  `mental_model.description` as a node, edge, or stage of the primary's cascade, it belongs in
-  the primary note. It is **not** a spinoff.
-- **Supporting evidence, examples, or analogies.** Those compress into `why_it_matters` or
-  `boundary`, or they live as labels in `mental_model.description`.
-- **Vocabulary mentioned in passing without elaboration.** A concept that gets a sentence and
-  no more is a term, not an atom.
-
-**Necessity test** — for each potential spinoff, ask:
-
-> *"If I remove this concept entirely from the primary note (no mention in Definition, no
-> appearance in Mental Model, no bullet in Why or Boundary), would the primary concept's
-> exposition still hold together?"*
-
-- **NO** (removal damages the primary) → **NOT a spinoff.** Keep it embedded. It is part of
-  this atom.
-- **YES** (the primary stands on its own without this concept) → **Eligible.** Proceed to
-  the cross-check.
-
-**Worked example.** Source: a video explaining how websites scale from 1 user to 1M users
-using a bubble tea franchise metaphor. Primary concept: *Demand-Driven Scaling*. Concepts
-mentioned: Cache, Docker, CI/CD, Load Balancer, Read Replica, Microservice, CDN, Rate Limiter,
-Queue.
-
-- Each of these 9 is a **stage in the cascade** the primary concept describes. Removing any
-  one gutts the Mental Model. → **0 atom-mode spinoffs.** All 9 live in
-  `mental_model.description`.
-
-  (Note: this exact source, when actually classified, would likely be `note_mode = thesis`
-  with the 9 stages distributed across themes — see 5b. The atom-mode worked example here is
-  hypothetical, illustrating the necessity test rather than recommending a classification.)
-
-- Contrast: a source *specifically about cache eviction policies* mentions LRU, LFU, FIFO each
-  with its own taxonomy. Primary is "Cache Eviction Policy". The three algorithms each have
-  their own atomic structure. Removing LFU does not damage the primary. → **2 atom-mode
-  spinoffs** (LFU, FIFO; LRU might be the worked example in the primary).
+A **spinoff candidate** is a concept the source treats as an **independently atomic topic**: its
+own definition or exposition, or named by the source as a separate vault-worthy idea. Stages of
+the primary concept's cascade, supporting evidence, examples, analogies, and vocabulary mentioned
+in passing are not spinoffs. Apply the **necessity test** to each candidate: remove the concept
+from the primary note entirely (Definition, Mental Model, Why, Boundary); if the exposition no
+longer holds together, it is part of this atom, not a spinoff. The full rules and two worked
+examples are in `docs/agents/conceptual-modeler-detail.md` in this plugin; read it when a source
+offers more than two candidates.
 
 #### 5b. Thesis-mode spinoff detection (note_mode = thesis)
 
@@ -464,16 +418,14 @@ Return the full artifact to the caller.
 
 ## Error Handling
 
-| Issue | Action | Terminal Output |
-|-------|--------|-----------------|
-| (atom only) Concept un-distillable to ≤ 50 chars | Abort with suggestion to refine concept name upstream (the discover-layer concept may be too broad — split via spinoff). Applies only when `note_mode = atom`; thesis mode does not produce a one-line definition. | `echo -e "${RED}✗ ABORT:${RESET} Atom concept cannot fit in 50-char definition\n${DIM}  Refine concept name upstream or split via spinoff${RESET}"` |
-| (atom only) Budget > 500 after compression and optional-section demotion | Abort — concept is too dense to fit in one atom note. Caller should re-run with a narrower concept or consider whether the source is actually thesis-shaped. | `echo -e "${RED}✗ ABORT:${RESET} Atom concept cannot fit in 500-char budget — likely needs splitting via spinoff or reclassification to thesis${RESET}"` |
-| (thesis only) Cannot identify a coherent macro thesis from source | Abort with suggestion to reclassify as atom instead. If the source has no macro claim, the modeler is likely mis-classifying a glossary-style source as thesis. | `echo -e "${RED}✗ ABORT:${RESET} No coherent macro thesis identifiable\n${DIM}  Reclassify as atom or refine source selection${RESET}"` |
-| (thesis only) Zero supporting themes pass the one-atom-per-chapter rule | Abort — thesis without supporting structure is just a claim. Recommend reclassification to atom or selection of a richer source. | `echo -e "${RED}✗ ABORT:${RESET} Thesis has no supporting themes — reclassify as atom${RESET}"` |
-| (thesis only) Every chapter < 200 chars after authoring | Abort — chapters are too thin to constitute a thesis; source is probably atom-shaped. | `echo -e "${RED}✗ ABORT:${RESET} All thesis chapters under-budget (<200) — reclassify as atom${RESET}"` |
-| `modality_hint = structural-bullets` but can produce only one component | Warn and emit a single Definition (atom) / executive summary (thesis) without Mental Model; signal diagram-agent will receive an empty hint | `echo -e "${YELLOW}⚠${RESET} Insufficient components for Structural Bullets\n${DIM}  diagram-agent will receive empty hint${RESET}"` |
-| Source has no extractable mental model at all | Warn, set `modality_hint = structural-bullets`, attempt component extraction; if still empty, escalate to the row above | `echo -e "${YELLOW}⚠${RESET} No extractable mental model from source${RESET}"` |
-| `discover_output` missing required fields | Abort — caller (skill orchestrator) must supply complete discover-layer output | `echo -e "${RED}✗ ABORT:${RESET} discover_output missing required fields${RESET}"` |
+Abort (`✗ ABORT:` in RED, then the reason) when: an atom concept cannot fit a 50-char definition, or
+its body stays over 500 chars after compression and optional-section demotion (refine the concept
+upstream, split via spinoff, or reclassify as thesis); a thesis has no coherent macro claim, no theme
+passes one-atom-per-chapter, or every chapter stays under 200 chars (reclassify as atom);
+`discover_output` lacks required fields. Warn (`⚠` in YELLOW) and continue when structural bullets
+yield a single component or the source has no extractable mental model: emit the definition or
+summary without a Mental Model, and diagram-agent receives an empty hint. The full table, with each
+message, is in `docs/agents/conceptual-modeler-detail.md` in this plugin.
 
 ---
 

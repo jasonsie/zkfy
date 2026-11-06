@@ -1,4 +1,5 @@
 ---
+name: markdown-file-agent
 description: "Extract content from URLs, text, or transcripts and produce structured Markdown files"
 whenToUse: "Use when raw content (URL, text, file, video transcript) needs to be converted into a clean, structured Markdown file"
 capabilities:
@@ -12,7 +13,7 @@ tools:
   - Read
   - Write
   - Bash
-model: sonnet
+model: inherit
 color: green
 mode: best-effort
 externalDependencies:

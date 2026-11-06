@@ -1,6 +1,6 @@
 ---
 name: zk-note
-description: Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Propose backlinks and MOC entries for the new note.
+description: "Transform markdown files into fully integrated Zettelkasten notes using the Hybrid Atom/Thesis pipeline (Discover → Distill → Render → Integrate). Use when you need to (1) Create atomic notes or thesis-dossier notes from existing markdown, (2) Let the modeler classify note_mode and distill the appropriate artifact (atom: ≤500-char body; thesis: per-chapter 200–1500-char themes), (3) Propose backlinks and MOC entries for the new note."
 ---
 
 # ZK-Note
@@ -13,6 +13,10 @@ pipeline runs four agents — `zettelkasten-agent` (Discover) → `conceptual-mo
 followed by a cross-pollination pass that only proposes edits. Spinoff candidates (both
 atom-spinoffs and thesis-chapter-overflow spinoffs) are listed in the final report and
 never saved to a file.
+
+## Paths and delegation
+
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
 
 ## Input
 
@@ -36,7 +40,7 @@ Source File
     │
     ▼
 ┌────────────────────────────────┐
-│  zettelkasten-agent (sonnet)   │  Discover layer
+│  zettelkasten-agent            │  Discover layer
 │  (atomic concept + metadata)   │
 │                                │
 │  → domain                      │
@@ -51,7 +55,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  conceptual-modeler-agent      │  Distill layer
-│  (opus — deep reasoning)       │
+│  (deep reasoning)              │
 │                                │
 │  → note_mode: atom | thesis    │ ◄── classified per ADR-0002 D2
 │                                │
@@ -77,7 +81,7 @@ Source File
            │ note_mode + mode-payload
            ▼
 ┌────────────────────────────────┐
-│  diagram-agent (sonnet)        │  Render utility
+│  diagram-agent                 │  Render utility
 │  (Image > ASCII > Mermaid >    │
 │   Structural Bullets)          │
 │                                │
@@ -87,7 +91,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  obsidian-formatter-agent      │  Integrate layer
-│  (sonnet — mechanical)         │
+│  (mechanical)                  │
 │                                │
 │  consumes note_mode (REQUIRED) │ ◄── branches skeleton on mode
 │  → Train-Case filename         │
@@ -102,7 +106,7 @@ Source File
            ▼
 ┌────────────────────────────────┐
 │  cross-pollinator-agent        │  Graph enrichment
-│  (sonnet — Dry run: true)      │
+│  (Dry run: true)               │
 │  → proposed backlinks, shown   │
 │    to the user for approval    │
 └──────────┬─────────────────────┘
@@ -123,7 +127,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the zettelkasten-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/zettelkasten-agent.md
+Read the agent instructions at: <zkfy-root>/agents/zettelkasten-agent.md
 
 Then run the Discover layer on this source:
 Source file: <path>
@@ -155,7 +159,7 @@ Steps 4 and 5 — never re-derive it.
 ```
 Prompt: "You are delegated to act as the conceptual-modeler-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/conceptual-modeler-agent.md
+Read the agent instructions at: <zkfy-root>/agents/conceptual-modeler-agent.md
 
 Then run the Distill layer:
 discover_output: <full payload from Step 2>
@@ -206,7 +210,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the diagram-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
+Read the agent instructions at: <zkfy-root>/agents/diagram-agent.md
 
 Then render the Mental Model diagram for this concept:
 modality_hint: <conceptual_artifact.mental_model.modality_hint>
@@ -236,7 +240,7 @@ through verbatim — never re-derive it from payload shape.
 ```
 Prompt: "You are delegated to act as the obsidian-formatter-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/obsidian-formatter-agent.md
+Read the agent instructions at: <zkfy-root>/agents/obsidian-formatter-agent.md
 Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
 
 Then assemble the mode-appropriate note (atom skeleton per ADR-0001 D5 or thesis
@@ -291,7 +295,7 @@ to the new note:
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
+Read the agent instructions at: <zkfy-root>/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note path from Step 5>

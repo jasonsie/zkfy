@@ -1,5 +1,8 @@
 ---
+name: query-to-note
 description: "Promote a query answer or synthesis into a permanent Zettelkasten note. Files valuable explorations back into the vault."
+argument-hint: "<question>"
+disable-model-invocation: true
 ---
 
 # Query to Note
@@ -18,13 +21,15 @@ $ARGUMENTS — a question or topic to research and file as a permanent note. Exa
 
 You are an orchestrator that runs a multi-step pipeline with **progress tracking**. Read each agent/skill before delegating to it.
 
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
+
 ### Step 0: Initialize Task List
 
-Create a task list to track pipeline progress. Use TaskCreate to create these tasks:
+Create a task list to track pipeline progress. Use TaskCreate to create these tasks: Where the CLI has no task-list tool, keep the list in your reply.
 
 1. **Search vault for relevant notes**
    - Subject: "Search vault for relevant notes"
-   - Description: "Use `~/.local/bin/vault-knowledge search` to find notes related to the query"
+   - Description: "Use `vault-knowledge search` to find notes related to the query"
    - ActiveForm: "Searching vault"
 
 2. **Synthesize answer from vault knowledge**
@@ -56,7 +61,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 ### Step 0.5: Check for Existing Synthesis
 
-Before running the full pipeline, do a quick `~/.local/bin/vault-knowledge search "<question terms>" --limit 5` using the question as the query.
+Before running the full pipeline, do a quick `vault-knowledge search "<question terms>" --limit 5` using the question as the query.
 
 Scan the results for any note flagged `[SYNTHESIS]` (i.e., `Type: permanent` in its frontmatter). If one is found and its abstract substantially covers the question:
 
@@ -82,9 +87,9 @@ If no synthesis match found, proceed directly to Step 1 without prompting.
 
 **Update task**: Mark "Search vault for relevant notes" as `in_progress`
 
-Run `~/.local/bin/vault-knowledge search "<question terms>" --limit 10`.
+Run `vault-knowledge search "<question terms>" --limit 10`.
 
-Read the top results with `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"` to gather context — these are the source notes for the synthesis.
+Read the top results with `vault-knowledge read "<path>" --heading "<Heading>"` to gather context — these are the source notes for the synthesis.
 
 **Update task**: Mark "Search vault for relevant notes" as `completed`
 
@@ -113,10 +118,10 @@ Write the synthesis to a temporary file at `raw/synthesis-<topic-kebab>.md`.
 
 Use the `zk-note` skill to process it through the 4-agent Hybrid Atom/Thesis pipeline (see `docs/ADR/0001-concept-first-pipeline.md` for the 3-stage shape and `docs/ADR/0002-hybrid-atom-thesis-mode.md` for mode branching):
 
-1. `zettelkasten-agent` (sonnet) — Discover: atomic concept, domain, metadata, related notes
-2. `conceptual-modeler-agent` (opus) — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
-3. `diagram-agent` (sonnet) — Render: Image > ASCII > Mermaid > Structural Bullets
-4. `obsidian-formatter-agent` (sonnet) — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
+1. `zettelkasten-agent` — Discover: atomic concept, domain, metadata, related notes
+2. `conceptual-modeler-agent` — Distill: classifies `note_mode` (atom vs thesis) at the start of distillation per ADR-0002 D2, then branches output. Synthesized answers from `/query-to-note` are mode-agnostic: a synthesis that defines a single concept naturally becomes atom; a synthesis that compares 3 approaches, weighs trade-offs, or carries multiple supporting themes is naturally thesis-shaped. Modeler emits mental model, spinoff candidates (atom-spinoffs and thesis-chapter-overflow spinoffs are reported together), and a mode-aware char-budget self-check.
+3. `diagram-agent` — Render: Image > ASCII > Mermaid > Structural Bullets
+4. `obsidian-formatter-agent` — Integrate: consumes `note_mode` and branches skeleton assembly (atom Concept-First vs thesis synthesis-dossier); writes `Mode: atom | thesis` into frontmatter (ADR-0002 D8); omits Before/Next; returns suggested MOC entries without editing MOCs or neighbors
 
 Any spinoff candidates are listed in the final report only; nothing is written to a file.
 
@@ -128,7 +133,7 @@ Any spinoff candidates are listed in the final report only; nothing is written t
 
 **Update task**: Mark "Cross-pollinate related notes" as `in_progress`
 
-Delegate to `cross-pollinator-agent`:
+Delegate to `<zkfy-root>/agents/cross-pollinator-agent.md` the way the `zk-note` skill does (a general subagent that reads the file, or this session where the CLI has none):
 
 - New note path from Step 3
 - Candidate notes from Step 1
@@ -142,9 +147,9 @@ Present the proposed edits plus the suggested MOC entries from Step 3 (MOC path 
 
 **Update task**: Mark "Validate" as `in_progress`
 
-Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files.
+Run `vault-knowledge lint` and report violations touching the new or edited files.
 
-Run `~/.local/bin/vault-knowledge build` to regenerate the catalog.
+Run `vault-knowledge build` to regenerate the catalog.
 
 **Update task**: Mark "Validate" as `completed`
 

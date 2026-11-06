@@ -10,10 +10,10 @@ One shared implementation serves Pi and Claude Code. Use ordinary shell tools, n
 ## Retrieve
 
 ```bash
-~/.local/bin/vault-knowledge search "task concepts" --limit 6
-~/.local/bin/vault-knowledge read "returned/relative/Note.md" --heading "Returned Heading"
+vault-knowledge search "task concepts" --limit 6
+vault-knowledge read "returned/relative/Note.md" --heading "Returned Heading"
 # For long sections, use the returned line numbers:
-~/.local/bin/vault-knowledge read "returned/relative/Note.md" --start 50 --limit 80
+vault-knowledge read "returned/relative/Note.md" --start 50 --limit 80
 ```
 
 1. Search task concepts, not the whole user prompt. Expand abbreviations or translate English/Traditional Chinese terms when useful. For complex work, use a few focused searches (e.g. `portable harness`, `context management`, `memory governance`).
@@ -31,4 +31,4 @@ One shared implementation serves Pi and Claude Code. Use ordinary shell tools, n
 
 ## Other operations
 
-`~/.local/bin/vault-knowledge status` is read-only. Build/lint/inventory/baseline/hook commands belong to a separate maintenance workflow, not this skill. The configured vault's `docs/knowledge/query.md` and `maintenance.md` contain detailed policy; those are instructions, not substantive answer sources.
+`vault-knowledge status` is read-only. Build/lint/inventory/baseline/hook commands belong to a separate maintenance workflow, not this skill. The configured vault's `docs/knowledge/query.md` and `maintenance.md` contain detailed policy; those are instructions, not substantive answer sources.

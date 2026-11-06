@@ -1,6 +1,6 @@
 ---
 name: clip-to-zk
-description: File a source verbatim as a Mode clip vault note — URL, raw/ clip, video, file or text — with zkfy frontmatter, a Train-Case name, a domain folder and proposed backlinks.
+description: "File a source verbatim as a Mode clip vault note — URL, raw/ clip, video, file or text — with zkfy frontmatter, a Train-Case name, a domain folder and proposed backlinks."
 disable-model-invocation: true
 argument-hint: "<url | raw/<clip>.md | file | text | video-url> [domain] [--vault <root>]"
 ---
@@ -9,15 +9,17 @@ argument-hint: "<url | raw/<clip>.md | file | text | video-url> [domain] [--vaul
 
 One run files one source as one **clip note**: the source's content kept verbatim, with zkfy frontmatter
 (`Mode: clip`), a Train-Case filename, a domain folder and an appended `### Links` section. Decisions and
-reasons: `${CLAUDE_PLUGIN_ROOT}/docs/ADR/0004-clip-mode-verbatim-notes.md`; the full rule set:
-`${CLAUDE_PLUGIN_ROOT}/docs/plans/clip-to-zk.md`.
+reasons: `<zkfy-root>/docs/ADR/0004-clip-mode-verbatim-notes.md`; the full rule set:
+`<zkfy-root>/docs/plans/clip-to-zk.md`.
+
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
 
 The body is never edited by hand. Every file operation runs through one of three commands, via Bash:
 
 - `web-clipper` — the web-clipper plugin (2.2 or later); owns clip files: fetching, images, `--adopt`,
   `--release`, `--unadopt`, `--localize`
-- `CLIP` = `python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/clip_note.py --vault "<V>"`
-- `KNOW` = `python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/knowledge.py --vault "<V>"`
+- `CLIP` = `python3 -B <zkfy-root>/scripts/clip_note.py --vault "<V>"`
+- `KNOW` = `python3 -B <zkfy-root>/scripts/knowledge.py --vault "<V>"`
 
 `web-clipper` and `CLIP` take `--json`: read the JSON line and act on the exit code as each step says.
 Run every command from the vault root (`cd "<V>" && …`): web-clipper resolves relative paths against the
@@ -58,7 +60,7 @@ Exit 3 lists the notes that already record the source:
   - `2` (bot wall, login, paywall) → ask the user to save the page from their browser, then rerun with `--html <file>`.
   - `3` (a clip already exists) → ask whether to adopt that existing clip; yes → continue with it as the capture.
   - `1` or `4` → stop and show the message.
-- **Video**: delegate to `${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md` (Task tool, `subagent_type: general-purpose`, prompt: read that file, Mode STRICT, output `raw/src-<kebab-title>.md`). Any failure aborts the whole run.
+- **Video**: delegate to `<zkfy-root>/agents/video-agent.md` (Task tool, `subagent_type: general-purpose`, prompt: read that file, Mode STRICT, output `raw/src-<kebab-title>.md`). Any failure aborts the whole run.
 - **File**: `cp` it to `raw/src-<kebab-title>.md`. The original stays where it is.
 - **Text**: write it to `raw/src-<kebab-title>.md` with a quoted heredoc (`cat > … <<'EOF'`).
 
@@ -67,7 +69,7 @@ JSON summary, or, for an existing `raw/` clip, the folder whose `assets.json` li
 
 ### 5. Discover
 
-Delegate to `${CLAUDE_PLUGIN_ROOT}/agents/zettelkasten-agent.md` (same Task pattern) with:
+Delegate to `<zkfy-root>/agents/zettelkasten-agent.md` (same Task pattern) with:
 
 - the capture path `<C>`;
 - the domains from `<V>/docs/knowledge/scope.json` (`domains`: key → folder) and, for each, its existing sub-folders (`find "<V>/<folder>" -type d -not -path '*/.*'`, listed vault-relative);
@@ -78,7 +80,7 @@ Domain or folder unclear → ask the user; never pick heuristically and never in
 
 Build the destination `<D>` = `<domain folder>/<sub-folder>/<Prefix>-<concept>.md`. `<Prefix>` is the domain
 prefix the notes already in that folder use (e.g. `CS-`, `Web-`, `AI-`; see
-`${CLAUDE_PLUGIN_ROOT}/agents/obsidian-formatter-agent.md` Step 2).
+`<zkfy-root>/agents/obsidian-formatter-agent.md` Step 2).
 
 Write the Discover result to a JSON file in the session scratchpad, never inside the vault:
 
@@ -142,7 +144,7 @@ capture → `CLIP release "<C>" --json`. Only this run's capture goes; a user's 
 
 ### 10. Integrate
 
-1. Delegate to `${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md` with the new note, the vault root, the
+1. Delegate to `<zkfy-root>/agents/cross-pollinator-agent.md` with the new note, the vault root, the
    step 5 candidates and `Dry run: true`. Show its proposals; apply only the ones the user approves.
 2. Map suggestions: read the vault's maps (`maps` in `scope.json`) and propose a line and a place for the new
    note, as in `obsidian-formatter-agent.md` Step 5. Never edit or create a map.

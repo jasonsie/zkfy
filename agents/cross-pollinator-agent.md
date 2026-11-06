@@ -1,4 +1,5 @@
 ---
+name: cross-pollinator-agent
 description: "Update existing vault notes with backlinks and cross-references when a new note is ingested. Enriches the knowledge graph by connecting new content to existing notes."
 whenToUse: "Use after a new ZK note is created to propagate backlinks to related existing notes. Called by source-to-zk Phase 2.5."
 capabilities:
@@ -12,7 +13,7 @@ tools:
   - Edit
   - Grep
   - Glob
-model: sonnet
+model: inherit
 color: yellow
 mode: best-effort
 ---
@@ -51,7 +52,7 @@ RESET='\033[0m'
 
 - `new_note_path`: Path to the newly created ZK note
 - `vault_root`: Root directory of the Obsidian vault
-- `candidates`: List of candidate related note paths (from `~/.local/bin/vault-knowledge search`, max 10)
+- `candidates`: List of candidate related note paths (from `vault-knowledge search`, max 10)
 - `dry_run`: Boolean — if true, list proposed changes without executing
 
 ## Output

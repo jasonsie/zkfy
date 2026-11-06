@@ -57,6 +57,16 @@ _Avoid_: line, chunk, section
 The gate before an absorbed note is deleted: every unit of it has a ledger row (kept, reworded, duplicate of, dropped), every kept row matches the woven text, and the user has approved the rows that are not kept.
 _Avoid_: diff check, line check, content audit
 
+### Plugin
+
+**Binding**:
+The machine-local file `~/.config/zkfy/knowledge.json` (python, vault) that `vault-knowledge bind` writes and the `vault-knowledge` command reads; never inferred from the current folder.
+_Avoid_: config, launcher config, settings
+
+**Gap**:
+A feature a CLI cannot load as shipped, named in the README's support table until a release fills it with that CLI's own feature.
+_Avoid_: limitation, unsupported
+
 ### Clipping
 
 **Clip note**:

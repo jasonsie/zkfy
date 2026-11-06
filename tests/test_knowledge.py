@@ -390,8 +390,9 @@ class VaultTest(unittest.TestCase):
         self.assertEqual(denied["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertEqual(run("validate-zk-structure.sh", "333.ai/AI-New.md"), "")
         self.assertFalse((self.root / "output").exists())
-        signal = json.loads(run("signal-index-update.sh", "000.Index/AI-Map.md"))
-        self.assertTrue(signal["index_update_needed"])
+        signal = json.loads(run("signal-index-update.sh", "000.Index/AI-Map.md"))["hookSpecificOutput"]
+        self.assertEqual(signal["hookEventName"], "PostToolUse")
+        self.assertIn("vault-index/build", signal["additionalContext"])  # the scoped reminder, as Claude Code reads it
         self.assertEqual(run("signal-index-update.sh", "docs/knowledge/query.md"), "")
 
 

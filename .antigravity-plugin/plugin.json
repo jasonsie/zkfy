@@ -1,0 +1,14 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "zkfy",
+  "displayName": "zkfy",
+  "version": "1.6.0",
+  "description": "Turn URLs, videos and text into Zettelkasten literature notes for an Obsidian vault, and keep the vault healthy: ingest, clip, query, lint, reorganize.",
+  "author": {
+    "name": "Jason"
+  },
+  "homepage": "https://github.com/jasonsie/zkfy",
+  "repository": "https://github.com/jasonsie/zkfy",
+  "license": "MIT",
+  "keywords": ["zettelkasten", "obsidian", "knowledge-management", "notes"]
+}

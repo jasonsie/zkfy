@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""vault-knowledge: the zkfy knowledge CLI, bound to one vault on this machine.
+
+Runs this plugin's scripts/knowledge.py, found through this file's resolved path so the command
+works through the symlink ai-dotfiles puts in ~/.local/bin, against the vault named in the
+binding, ~/.config/zkfy/knowledge.json ($ZKFY_KNOWLEDGE_CONFIG overrides the path). Two
+subcommands belong to the launcher:
+
+  vault-knowledge bind --vault <root> [--python <interpreter>] [--dry-run]
+      write the binding; the vault must hold docs/knowledge/scope.json; idempotent
+  vault-knowledge unbind [--dry-run]
+      remove the binding
+
+Everything else goes to knowledge.py with --vault added: search, read, status, build, lint,
+reorg, ... (`vault-knowledge search --help` for one command's options).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import sys
+
+TOOL = Path(__file__).resolve().parents[1] / "scripts" / "knowledge.py"
+POLICY = "docs/knowledge/scope.json"
+DEFAULT_CONFIG = "~/.config/zkfy/knowledge.json"
+
+
+def config_path() -> Path:
+    return Path(os.environ.get("ZKFY_KNOWLEDGE_CONFIG", DEFAULT_CONFIG)).expanduser()
+
+
+def fail(message: str) -> int:
+    print(f"vault-knowledge: {message}", file=sys.stderr)
+    return 2
+
+
+def bind(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="vault-knowledge bind", description="Write the machine-local binding.")
+    parser.add_argument("--vault", required=True, help=f"vault root holding {POLICY}; never inferred from the current folder")
+    parser.add_argument("--python", default=sys.executable, help="interpreter with PyYAML that runs knowledge.py (default: this one)")
+    parser.add_argument("--dry-run", action="store_true", help="print what would change; write nothing")
+    a = parser.parse_args(args)
+    try:
+        root = Path(a.vault).expanduser().resolve(strict=True)
+    except OSError as e:
+        return fail(f"{a.vault}: {e}")
+    if not (root / POLICY).is_file():
+        return fail(f"{root} has no {POLICY}; the vault must carry its scope policy")
+    binding = {"python": str(Path(a.python).expanduser()), "vault": str(root)}
+    path = config_path()
+    current = None
+    if path.is_file():
+        try:
+            current = json.loads(path.read_text())
+        except ValueError:
+            current = None
+    if current == binding:
+        print(f"binding: unchanged {path}")
+        return 0
+    print(f"binding: {'would write' if a.dry_run else 'written'} {path}")
+    if not a.dry_run:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(binding, indent=2, sort_keys=True) + "\n")
+    return 0
+
+
+def unbind(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="vault-knowledge unbind", description="Remove the machine-local binding.")
+    parser.add_argument("--dry-run", action="store_true", help="print what would change; write nothing")
+    a = parser.parse_args(args)
+    path = config_path()
+    if not path.is_file():
+        print(f"binding: absent {path}")
+        return 0
+    print(f"binding: {'would remove' if a.dry_run else 'removed'} {path}")
+    if not a.dry_run:
+        path.unlink()
+    return 0
+
+
+def run(args: list[str]) -> int:
+    path = config_path()
+    try:
+        config = json.loads(path.read_text())
+        vault = str(Path(config["vault"]).expanduser().resolve(strict=True))
+        python = config.get("python") or sys.executable
+        if "/" not in python:  # a bare interpreter name: look it up on PATH
+            python = shutil.which(python) or python
+        python = str(Path(python).expanduser().resolve(strict=True))
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return fail(f"no usable binding at {path} ({e}); run: vault-knowledge bind --vault <root>")
+    if not TOOL.is_file():
+        return fail(f"{TOOL} is missing; this launcher runs from a zkfy checkout")
+    os.execv(python, [python, "-B", str(TOOL), "--vault", vault, *args])
+    return 2  # not reached
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
+    if argv[:1] == ["bind"]:
+        return bind(argv[1:])
+    if argv[:1] == ["unbind"]:
+        return unbind(argv[1:])
+    return run(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

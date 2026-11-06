@@ -14,6 +14,10 @@ followed by a cross-pollination pass that only proposes edits. Spinoff candidate
 atom-spinoffs and thesis-chapter-overflow spinoffs) are listed in the final report and
 never saved to a file.
 
+## Paths and delegation
+
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
+
 ## Input
 
 $ARGUMENTS — `<path-to-markdown-file> [domain]`
@@ -123,7 +127,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the zettelkasten-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/zettelkasten-agent.md
+Read the agent instructions at: <zkfy-root>/agents/zettelkasten-agent.md
 
 Then run the Discover layer on this source:
 Source file: <path>
@@ -155,7 +159,7 @@ Steps 4 and 5 — never re-derive it.
 ```
 Prompt: "You are delegated to act as the conceptual-modeler-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/conceptual-modeler-agent.md
+Read the agent instructions at: <zkfy-root>/agents/conceptual-modeler-agent.md
 
 Then run the Distill layer:
 discover_output: <full payload from Step 2>
@@ -206,7 +210,7 @@ Use the Task tool to delegate to a `general-purpose` subagent:
 ```
 Prompt: "You are delegated to act as the diagram-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
+Read the agent instructions at: <zkfy-root>/agents/diagram-agent.md
 
 Then render the Mental Model diagram for this concept:
 modality_hint: <conceptual_artifact.mental_model.modality_hint>
@@ -236,7 +240,7 @@ through verbatim — never re-derive it from payload shape.
 ```
 Prompt: "You are delegated to act as the obsidian-formatter-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/obsidian-formatter-agent.md
+Read the agent instructions at: <zkfy-root>/agents/obsidian-formatter-agent.md
 Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
 
 Then assemble the mode-appropriate note (atom skeleton per ADR-0001 D5 or thesis
@@ -291,7 +295,7 @@ to the new note:
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
+Read the agent instructions at: <zkfy-root>/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note path from Step 5>

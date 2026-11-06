@@ -33,7 +33,7 @@ Two prompt files must exist outside this repo or the relevant agents abort:
 - `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
 - `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
 
-Skills and commands reference agent files as `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the plugin's install directory when it loads skill, command and agent content (plugins/components.md "Path variables"). A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
+Skills name bundled files from the plugin root as `<zkfy-root>/<path>`, where `<zkfy-root>` is two levels above the skill's folder; the skill resolves it before delegating. Only Claude Code would fill in `${CLAUDE_PLUGIN_ROOT}` in skill text (Codex only in hook commands, Pi and Antigravity never), so skill text never uses it. `hooks/hooks.json` keeps `"${CLAUDE_PLUGIN_ROOT}"`, quoted: Claude and Codex fill it for hook commands. A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
 
 ## Vault contract
 
@@ -107,7 +107,7 @@ Clip notes (`Mode: clip`) do not follow this block. They carry the vault's minim
 ## Agent delegation pattern
 
 <important if="writing or modifying an agent">
-Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read the agent file (`${CLAUDE_PLUGIN_ROOT}/agents/<name>.md` in skills and commands; the sibling `agents/<name>.md` path in agent files). The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
+Agents do not call each other directly. They use the Task tool with `subagent_type: general-purpose` and a prompt that tells the subagent to read the agent file (`<zkfy-root>/agents/<name>.md` in skills, resolved to an absolute path; the sibling `agents/<name>.md` path in agent files). In a CLI without subagents (Pi), the skill reads the agent file and does its work in the session. The indirection is intentional — it lets the same agent file work both as a plugin agent and as an ad-hoc delegation target. Don't refactor it into direct calls.
 </important>
 
 ## Error handling decisions (not negotiable)

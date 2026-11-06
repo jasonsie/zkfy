@@ -38,7 +38,7 @@ You do **not** scan the vault for related notes (that's done upstream) and you d
 write files (that's done downstream). You think hard about the source, decide its mode, distill
 it to the appropriate artifact shape, and self-enforce the mode-appropriate body budget.
 
-See `~/.claude/CLAUDE.md` for the shared calculation rule and the mode skeletons summary. See `docs/ADR/0001-concept-first-pipeline.md` and
+See `CLAUDE.md` in this plugin for the shared calculation rule and the mode skeletons summary. See `docs/ADR/0001-concept-first-pipeline.md` and
 `docs/ADR/0002-hybrid-atom-thesis-mode.md` for the full rationale.
 
 ---

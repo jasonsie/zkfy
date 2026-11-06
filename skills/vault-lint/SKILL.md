@@ -18,7 +18,7 @@ Detect contradictions, staleness, orphan pages, missing pages, weak links, conce
 
 If the target vault has `docs/knowledge/scope.json`, its corpus policy overrides all legacy inventory/search/backlog/auto-fix procedures below:
 
-- Structural report: `python3 -B <zkfy-root>/scripts/knowledge.py --vault "<vault>" lint` (or `~/.local/bin/vault-knowledge lint` for the configured canonical vault).
+- Structural report: `python3 -B <zkfy-root>/scripts/knowledge.py --vault "<vault>" lint` (or `vault-knowledge lint` for the configured canonical vault).
 - Obtain candidates/sections only through that CLI's `search` and `read`; do not run the unrestricted note-scanner, whole-vault grep/globs, or source-backlog checks. `raw/` is entirely excluded, including in Check 12.
 - Missing `Mode` means an existing legacy profile, not an automatic atom migration. Use the scope's schema compatibility rules for structural checks.
 - Model-assisted contradiction/staleness analysis is a review suggestion, not mechanical factual verification. Dates alone do not establish staleness.
@@ -177,7 +177,7 @@ Notes with fewer than 2 outgoing links in their `### Links` section (not countin
 3. Flag notes with < 2 such links
 
 **Auto-fixable with `--fix`:**
-- Run `~/.local/bin/vault-knowledge search "<terms>" --limit N` (then `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"`) to find related notes based on the note's `Sub-Categories` and `### Abstract`
+- Run `vault-knowledge search "<terms>" --limit N` (then `vault-knowledge read "<path>" --heading "<Heading>"`) to find related notes based on the note's `Sub-Categories` and `### Abstract`
 - Suggest links with rationale text and append to `### Links` section
 
 ---
@@ -372,7 +372,7 @@ For each `[[<target>]]` wikilink appearing inside a `### <Theme>` chapter (NOT i
 Only runs when `--fix` flag is provided. Present each proposed fix to the user and apply only the ones explicitly approved; write no log. Fixable checks: 5, 6, 7, 10. Checks 11 and 12 are NOT auto-fixable; among the Concept-First / Hybrid Mode group, only Check 10 remains auto-fixable.
 
 For each fixable finding:
-1. **Check 5 (Weak links)**: Use `~/.local/bin/vault-knowledge search "<terms>" --limit N` and `read` to find related notes, propose suggested links with rationale to `### Links`
+1. **Check 5 (Weak links)**: Use `vault-knowledge search "<terms>" --limit N` and `read` to find related notes, propose suggested links with rationale to `### Links`
 2. **Check 6 (Concept gaps)**: Create stub notes with Train-Case naming, minimal frontmatter, stub Abstract
 3. **Check 7 (Cross-ref gaps)**: Add cross-references to `### Links` sections of both notes in the pair
 4. **Check 10 (Legacy `--preserve` artifacts)**: Apply the conservative fixes documented under Check 10 — delete `format_mode`/`preserve` frontmatter keys, rename `### Abstract` → `### Definition` only when safe. Never touch `### Content` or preserve-era marker comments automatically.

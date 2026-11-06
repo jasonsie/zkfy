@@ -16,6 +16,8 @@ The Concept-First pipeline (see `docs/ADR/0001-concept-first-pipeline.md`) is th
 
 You are an orchestrator that runs a multi-phase pipeline with **progress tracking**. Read each agent file before delegating to it.
 
+`<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every `<zkfy-root>/…` path to an absolute path before you run it or hand it to a subagent. In a CLI without subagents (Pi), read the agent file yourself, do its work in this session, and continue with the next step.
+
 ### Step 0: Initialize Task List
 
 Create a task list to track pipeline progress. Use TaskCreate to create these tasks:
@@ -84,14 +86,14 @@ Otherwise: Mark task #2 as `deleted` (not needed)
 
 **Update task**: Mark "Extract video transcript" as `in_progress`
 
-**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md`
+**Read agent**: `<zkfy-root>/agents/video-agent.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
 ```
 Prompt: "You are delegated to act as the video-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/video-agent.md
+Read the agent instructions at: <zkfy-root>/agents/video-agent.md
 
 Then extract the transcript from this video URL: <video_url>
 
@@ -111,7 +113,7 @@ Return the path to the created transcript file."
 
 **Update task**: Mark "Generate structured Markdown" as `in_progress`
 
-**Read agent**: `${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md`
+**Read agent**: `<zkfy-root>/agents/markdown-file-agent.md`
 **Read prompt**: `~/.claude/prompts/crawler.prompt.md`
 
 Use the Task tool to delegate to `general-purpose` subagent with:
@@ -119,7 +121,7 @@ Use the Task tool to delegate to `general-purpose` subagent with:
 ```
 Prompt: "You are delegated to act as the markdown-file-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/markdown-file-agent.md
+Read the agent instructions at: <zkfy-root>/agents/markdown-file-agent.md
 Read the formatting rules at: ~/.claude/prompts/crawler.prompt.md
 
 Then convert this source to structured Markdown:
@@ -131,7 +133,7 @@ Requirements:
 - Web URL: clip it with the web-clipper plugin, a zkfy dependency (web-clipper "<url>" --out raw --json); the clip lands at raw/<Page Title>.md with its images under the vault attachment folder and is a durable source, never an intermediate
 - Text / transcript: output to raw/src-<title-kebab>.md
 - If the clipper exits 2 (bot challenge, login wall, paywall), stop and ask the user to save the page from their browser and rerun with --html <file>; do not substitute WebFetch or any scraper
-- For complex diagrams, you may sub-delegate to ${CLAUDE_PLUGIN_ROOT}/agents/diagram-agent.md
+- For complex diagrams, you may sub-delegate to <zkfy-root>/agents/diagram-agent.md
 
 Return the path to the created Markdown file."
 ```
@@ -163,13 +165,13 @@ Use the `zk-note` skill to orchestrate the integration:
 
 After the new note is created, propose backlinks to existing related notes:
 
-1. Run `~/.local/bin/vault-knowledge search "<new note's concept terms>" --limit 10`, then `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"` on promising results
+1. Run `vault-knowledge search "<new note's concept terms>" --limit 10`, then `vault-knowledge read "<path>" --heading "<Heading>"` on promising results
 2. Delegate to `cross-pollinator-agent`:
 
 ```
 Prompt: "You are delegated to act as the cross-pollinator-agent agent.
 
-Read the agent instructions at: ${CLAUDE_PLUGIN_ROOT}/agents/cross-pollinator-agent.md
+Read the agent instructions at: <zkfy-root>/agents/cross-pollinator-agent.md
 
 Then cross-pollinate this newly created note:
 New note path: <note_path from Phase 2>
@@ -191,8 +193,8 @@ Present the proposed edits plus the suggested MOC entries from Phase 2 (MOC path
 
 Phase 3 is **mandatory** — do not skip even if earlier phases had warnings.
 
-1. Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files
-2. Run `~/.local/bin/vault-knowledge build` to regenerate the catalog
+1. Run `vault-knowledge lint` and report violations touching the new or edited files
+2. Run `vault-knowledge build` to regenerate the catalog
 
 **On success**: Update task to `completed`
 **On failure**: Report the error to the user. Do NOT mark the pipeline as fully successful.

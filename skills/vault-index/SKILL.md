@@ -10,8 +10,8 @@ Input: `[--full | --append <note-path> | --check] [--vault PATH]`.
 For the configured canonical vault:
 
 ```bash
-~/.local/bin/vault-knowledge build
-~/.local/bin/vault-knowledge build --check
+vault-knowledge build
+vault-knowledge build --check
 ```
 
 For an explicitly chosen other vault:

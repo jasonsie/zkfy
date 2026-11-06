@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-zk-structure.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/validate-zk-structure.sh\""
           }
         ],
         "description": "Respect scoped vault policy without redirecting files; preserve legacy checks for unconfigured vaults"
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/signal-index-update.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/signal-index-update.sh\""
           }
         ],
         "description": "Remind about separate generated-only maintenance after eligible note/map edits; exclude source paths"

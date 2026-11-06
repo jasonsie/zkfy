@@ -198,8 +198,8 @@ Use the `zk-note` skill to orchestrate the integration:
 
 **Update task**: Mark "Validate" as `in_progress`
 
-1. Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files
-2. Run `~/.local/bin/vault-knowledge build` to regenerate the catalog
+1. Run `vault-knowledge lint` and report violations touching the new or edited files
+2. Run `vault-knowledge build` to regenerate the catalog
 
 **Update task**: Mark "Validate" as `completed`
 

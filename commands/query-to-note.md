@@ -24,7 +24,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 1. **Search vault for relevant notes**
    - Subject: "Search vault for relevant notes"
-   - Description: "Use `~/.local/bin/vault-knowledge search` to find notes related to the query"
+   - Description: "Use `vault-knowledge search` to find notes related to the query"
    - ActiveForm: "Searching vault"
 
 2. **Synthesize answer from vault knowledge**
@@ -56,7 +56,7 @@ Create a task list to track pipeline progress. Use TaskCreate to create these ta
 
 ### Step 0.5: Check for Existing Synthesis
 
-Before running the full pipeline, do a quick `~/.local/bin/vault-knowledge search "<question terms>" --limit 5` using the question as the query.
+Before running the full pipeline, do a quick `vault-knowledge search "<question terms>" --limit 5` using the question as the query.
 
 Scan the results for any note flagged `[SYNTHESIS]` (i.e., `Type: permanent` in its frontmatter). If one is found and its abstract substantially covers the question:
 
@@ -82,9 +82,9 @@ If no synthesis match found, proceed directly to Step 1 without prompting.
 
 **Update task**: Mark "Search vault for relevant notes" as `in_progress`
 
-Run `~/.local/bin/vault-knowledge search "<question terms>" --limit 10`.
+Run `vault-knowledge search "<question terms>" --limit 10`.
 
-Read the top results with `~/.local/bin/vault-knowledge read "<path>" --heading "<Heading>"` to gather context — these are the source notes for the synthesis.
+Read the top results with `vault-knowledge read "<path>" --heading "<Heading>"` to gather context — these are the source notes for the synthesis.
 
 **Update task**: Mark "Search vault for relevant notes" as `completed`
 
@@ -142,9 +142,9 @@ Present the proposed edits plus the suggested MOC entries from Step 3 (MOC path 
 
 **Update task**: Mark "Validate" as `in_progress`
 
-Run `~/.local/bin/vault-knowledge lint` and report violations touching the new or edited files.
+Run `vault-knowledge lint` and report violations touching the new or edited files.
 
-Run `~/.local/bin/vault-knowledge build` to regenerate the catalog.
+Run `vault-knowledge build` to regenerate the catalog.
 
 **Update task**: Mark "Validate" as `completed`
 

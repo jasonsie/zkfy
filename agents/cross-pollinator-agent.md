@@ -51,7 +51,7 @@ RESET='\033[0m'
 
 - `new_note_path`: Path to the newly created ZK note
 - `vault_root`: Root directory of the Obsidian vault
-- `candidates`: List of candidate related note paths (from `~/.local/bin/vault-knowledge search`, max 10)
+- `candidates`: List of candidate related note paths (from `vault-knowledge search`, max 10)
 - `dry_run`: Boolean — if true, list proposed changes without executing
 
 ## Output

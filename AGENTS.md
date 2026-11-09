@@ -28,10 +28,10 @@ The 3-stage architecture itself is unchanged from ADR-0001 — only the modeler'
 
 ## Non-obvious dependencies
 
-Two prompt files must exist outside this repo or the relevant agents abort:
+Nothing outside this repo is required: the agents carry their own extraction and note-structure rules, so the plugin also runs where only the repository exists, such as a Claude Code cloud session (`cloud/`, `docs/cloud-session.md`). Two files are read as overrides when they exist, never required:
 
-- `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules
-- `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules
+- `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules (markdown-file-agent)
+- `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules (obsidian-formatter-agent, after the vault's own `docs/workflows/vault-authoring.md` when the vault has one)
 
 Skills name bundled files from the plugin root as `<zkfy-root>/<path>`, where `<zkfy-root>` is two levels above the skill's folder; the skill resolves it before delegating. Only Claude Code would fill in `${CLAUDE_PLUGIN_ROOT}` in skill text (Codex only in hook commands, Pi and Antigravity never), so skill text never uses it. `hooks/hooks.json` keeps `"${CLAUDE_PLUGIN_ROOT}"`, quoted: Claude and Codex fill it for hook commands. Antigravity reads the root `hooks.json` instead (relative paths, run from the plugin root) and Pi `extensions/zkfy.ts`, which runs the same two scripts around its write and edit tools and registers the Notion MCP server; the scripts tell the two payload shapes apart by the `toolCall` key, and `tests/test_portable.py` keeps the three entry points in step. A delegated subagent reads an agent file with the Read tool, where nothing is substituted, so an agent file names a sibling agent as `agents/<name>.md` in this plugin (the folder it was read from). During development, read the in-repo `agents/` path directly.
 

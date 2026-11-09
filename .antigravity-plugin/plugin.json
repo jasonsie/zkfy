@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "zkfy",
   "displayName": "zkfy",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Turn URLs, videos and text into Zettelkasten literature notes for an Obsidian vault, and keep the vault healthy: ingest, clip, query, lint, reorganize.",
   "author": {
     "name": "Jason"

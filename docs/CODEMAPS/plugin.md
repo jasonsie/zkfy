@@ -101,8 +101,8 @@ One script per event, three ways in: `hooks/hooks.json` (Claude Code and Codex, 
 
 | Dependency | Location | Required |
 |------------|----------|----------|
-| `crawler.prompt.md` | `~/.claude/prompts/` | Yes |
-| `obsidian-note.prompt.md` | `~/.claude/prompts/` | Yes |
+| `crawler.prompt.md` | `~/.claude/prompts/` | Optional override |
+| `obsidian-note.prompt.md` | `~/.claude/prompts/` | Optional override, read after the vault's `docs/workflows/vault-authoring.md` |
 | `notion-crawler.prompt.toml` | `~/.claude/prompts/` | /notion-to-zk only |
 | Vault domain folders | Target vault (auto-discovered) | Yes |
 | `000.Index/` MOCs | Target vault | Optional but recommended |
@@ -136,6 +136,9 @@ zkfy/
   hooks.json                     # The hooks for Antigravity (relative paths, plugin root as cwd)
   extensions/zkfy.ts             # Pi: the hooks around write and edit, and the Notion server
   bin/vault-knowledge            # The knowledge CLI on PATH (bind, unbind, knowledge.py commands)
+  cloud/
+    setup.sh                     # A Claude Code cloud environment's setup script: plugins, clipper CLI, Chromium
+    session-start.sh             # The vault's SessionStart hook in the cloud: report, binding, PATH
   agents/                        # 8 agents, model: inherit
   skills/                        # 11 skills; the five entry points among them
   hooks/
@@ -144,5 +147,6 @@ zkfy/
     signal-index-update.sh       # Auto-index signal (vault detection)
   docs/agents/                   # Long-form detail an agent points at
   docs/CODEMAPS/                 # This codemap
+  docs/cloud-session.md          # Run source-to-zk in a Claude Code cloud session
   tests/                         # unittest, incl. test_portable.py, test_hooks.py, test_pi_extension.py
 ```

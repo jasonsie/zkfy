@@ -241,7 +241,7 @@ through verbatim — never re-derive it from payload shape.
 Prompt: "You are delegated to act as the obsidian-formatter-agent agent.
 
 Read the agent instructions at: <zkfy-root>/agents/obsidian-formatter-agent.md
-Read the formatting rules at: ~/.claude/prompts/obsidian-note.prompt.md
+Read the formatting rules, each only if it exists: <vault_root>/docs/workflows/vault-authoring.md, then ~/.claude/prompts/obsidian-note.prompt.md; your own skeleton applies without them
 
 Then assemble the mode-appropriate note (atom skeleton per ADR-0001 D5 or thesis
 synthesis-dossier skeleton per ADR-0002 D4, branched on note_mode):

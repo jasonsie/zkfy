@@ -102,39 +102,43 @@ claude plugin marketplace add jasonsie/web-clipper
 /plugin install zkfy --marketplace jasonsie/zkfy
 
 # Codex
-codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.8.0
+codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.8.1
 codex plugin add zkfy@zkfy-marketplace
 
 # Pi
-pi install git:github.com/jasonsie/zkfy@zkfy--v1.8.0
+pi install git:github.com/jasonsie/zkfy@zkfy--v1.8.1
 
 # Antigravity
-agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.8.0
+agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.8.1
 ```
 
 Without ai-dotfiles, put the plugin's `bin/vault-knowledge` on your PATH yourself; Claude Code
 does that on its own.
+
+### Cloud sessions
+
+A Claude Code cloud session installs no plugins. To run `source-to-zk` from the Claude app on
+a vault that is a GitHub repository, provision the cloud environment with `cloud/setup.sh` and
+add the vault-side hook: see [docs/cloud-session.md](docs/cloud-session.md).
 
 ### Bind the vault
 
 ```bash
 # Writes ~/.config/zkfy/knowledge.json (python, vault); idempotent; --dry-run; `unbind` removes it
 vault-knowledge bind --vault /path/to/your/vault
-
-# The prompt files the agents read
-mkdir -p ~/.claude/prompts
-touch ~/.claude/prompts/crawler.prompt.md ~/.claude/prompts/obsidian-note.prompt.md
 ```
 
-### Configure Prompts
+### Optional prompt overrides
 
-Create these prompt files with your formatting rules:
+The agents carry their own extraction and note-structure rules, and the formatter also reads
+the vault's `docs/workflows/vault-authoring.md` when the vault has one. To override them on
+one machine, create any of:
 
 **`~/.claude/prompts/crawler.prompt.md`** — Markdown formatting rules for content extraction
 
 **`~/.claude/prompts/obsidian-note.prompt.md`** — Zettelkasten literature note structure rules
 
-**`~/.claude/prompts/notion-crawler.prompt.toml`** _(optional)_ — Custom rules for Notion content extraction
+**`~/.claude/prompts/notion-crawler.prompt.toml`** — Custom rules for Notion content extraction
 
 ## Usage
 
@@ -329,6 +333,8 @@ The plugin follows ai-dotfiles' `portable-plugin` rules; a feature a CLI cannot 
 
 `agy plugin validate --strict` reports three warnings by design: `.mcp.json`, `hooks/hooks.json` and `AGENTS.md` are the files Claude Code, Codex and the maintainers read, not Antigravity's.
 
+A Claude Code cloud session is a fifth surface: it loads the plugin from `/opt/ai-plugins` through `CLAUDE_CODE_PLUGIN_DIRS` after `cloud/setup.sh` provisioned the environment; see [docs/cloud-session.md](docs/cloud-session.md).
+
 ## Architecture
 
 ### Component Structure
@@ -447,7 +453,7 @@ When modifying agents:
 - **Claude Code, Codex, Pi or Antigravity**: a current version (see Support by CLI)
 - **Python 3.10+** with PyYAML, for `vault-knowledge`
 - **Obsidian**: With proper vault structure
-- **External prompts**: `crawler.prompt.md` and `obsidian-note.prompt.md`
+- **Prompt overrides** _(optional)_: `~/.claude/prompts/crawler.prompt.md`, `obsidian-note.prompt.md`
 - **web-clipper plugin** _(dependency, [jasonsie/web-clipper](https://github.com/jasonsie/web-clipper))_: Node 21+, the built `obsidian-clipper` CLI and Python Playwright, for URL sources
 - **Notion MCP** _(optional)_: the plugin's own server, for `notion-to-zk` (not in Pi)
 

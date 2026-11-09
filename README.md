@@ -102,14 +102,14 @@ claude plugin marketplace add jasonsie/web-clipper
 /plugin install zkfy --marketplace jasonsie/zkfy
 
 # Codex
-codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.7.0
+codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.8.0
 codex plugin add zkfy@zkfy-marketplace
 
 # Pi
-pi install git:github.com/jasonsie/zkfy@zkfy--v1.7.0
+pi install git:github.com/jasonsie/zkfy@zkfy--v1.8.0
 
 # Antigravity
-agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.7.0
+agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.8.0
 ```
 
 Without ai-dotfiles, put the plugin's `bin/vault-knowledge` on your PATH yourself; Claude Code
@@ -232,7 +232,7 @@ Import any Notion page directly into your vault via MCP integration.
 /zkfy:notion-to-zk https://www.notion.so/workspace/Page-Title-abc123
 ```
 
-Uses the plugin's `notion` MCP server (`.mcp.json` for Claude Code and Codex, `mcp_config.json` for Antigravity); connect it once when asked. Pi loads no plugin MCP server until 1.8.0, so this skill is not available there.
+Uses the plugin's `notion` MCP server (`.mcp.json` for Claude Code and Codex, `mcp_config.json` for Antigravity, registered by `extensions/zkfy.ts` in Pi); connect it once when asked.
 
 ### Web clipping
 
@@ -323,8 +323,8 @@ The plugin follows ai-dotfiles' `portable-plugin` rules; a feature a CLI cannot 
 |---|---|---|---|---|
 | Skills (11) | yes, as `/zkfy:<skill>` | yes | yes, as `/skill:<skill>` | yes, as `/<skill>` |
 | `vault-knowledge` on PATH | the plugin's `bin/`, and ai-dotfiles' link | ai-dotfiles' link | ai-dotfiles' link | ai-dotfiles' link |
-| Hooks (vault guard, catalog reminder) | yes | yes, after trusting them once in `/hooks` | gap: a Pi extension comes in 1.8.0 | gap: a root `hooks.json` comes in 1.8.0 |
-| MCP server `notion` | yes (`.mcp.json`) | yes (`.mcp.json`) | gap: the 1.8.0 extension registers it | yes (`mcp_config.json`) |
+| Hooks (vault guard, catalog reminder) | yes | yes, after trusting them once in `/hooks` | yes, through `extensions/zkfy.ts` | yes (`hooks.json`); the reminder arrives with the write's approval, since Antigravity's PostToolUse carries nothing back to the agent |
+| MCP server `notion` | yes (`.mcp.json`) | yes (`.mcp.json`) | yes, `extensions/zkfy.ts` registers it | yes (`mcp_config.json`) |
 | Agents (8) | yes | no plugin agents in Codex; skills read the agent file in the session | no subagents; skills read the agent file in the session | yes |
 
 `agy plugin validate --strict` reports three warnings by design: `.mcp.json`, `hooks/hooks.json` and `AGENTS.md` are the files Claude Code, Codex and the maintainers read, not Antigravity's.
@@ -342,6 +342,9 @@ zkfy/
 │   └── plugin.json              # Antigravity's native manifest: loads the plugin as is
 ├── .mcp.json                    # Notion MCP server for Claude Code and Codex
 ├── mcp_config.json              # The same server for Antigravity
+├── hooks.json                   # The hooks for Antigravity: relative paths, run from the plugin root
+├── extensions/
+│   └── zkfy.ts                  # Pi: the two hooks around write and edit, and the Notion server
 ├── bin/
 │   └── vault-knowledge          # The knowledge CLI on PATH: bind, unbind, then knowledge.py's commands
 ├── agents/
@@ -373,7 +376,7 @@ zkfy/
 │   ├── hooks.json               # PreToolUse / PostToolUse hooks (Claude Code, Codex)
 │   ├── validate-zk-structure.sh # Vault structure guard
 │   └── signal-index-update.sh   # Catalog maintenance reminder
-└── tests/                       # unittest: knowledge, reorg, clip_note, the launcher, the portable invariants
+└── tests/                       # unittest: knowledge, reorg, clip_note, the launcher, the hooks, the Pi extension, the portable invariants
 ```
 
 ### Agent Delegation
@@ -402,7 +405,7 @@ Each agent has a single, clear purpose and standardized terminal output formatti
 ### Testing
 
 ```bash
-# Unit tests: knowledge, reorg, clip_note, the launcher, the portable-plugin invariants
+# Unit tests: knowledge, reorg, clip_note, the launcher, the hooks in every CLI's shape, the Pi extension (needs node), the portable-plugin invariants
 python3 -B -m unittest discover -s tests -p 'test_*.py'
 
 # The portable-plugin check (ai-dotfiles' skill): no error in either validator
@@ -414,9 +417,8 @@ agy plugin validate --strict .      # three warnings by design, see Support by C
 /zkfy:query-to-note "How does X compare to Y?"
 /zkfy:vault-lint 333.ai/
 
-# Test hook validation
-cd hooks/
-./test-validation.sh
+# One hook script, both payload shapes, by hand
+printf '{"tool_name":"Write","tool_input":{"file_path":"%s/note.md"}}' "$PWD" | hooks/validate-zk-structure.sh
 ```
 
 ### Modifying Agents

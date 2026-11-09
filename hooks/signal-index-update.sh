@@ -1,82 +1,74 @@
 #!/usr/bin/env bash
-# signal-index-update.sh
-# PostToolUse hook: detect if a .md file was written inside a zkfied vault,
-# and emit a reminder signal to update the vault index.
+# PostToolUse: after a note is written in a zkfied vault, remind the agent to keep the generated
+# catalog current. A configured vault (docs/knowledge/scope.json above the note) decides through
+# scripts/knowledge-hook.py; elsewhere a vault is a folder with a .claude/ sibling, found by
+# walking up from the file. Nothing is written here.
 #
-# A "zkfied vault" is detected by walking up the file path looking for a
-# .claude/ sibling directory — structure-based, not path-based.
-#
-# Input (stdin): Claude Code PostToolUse event JSON
-# Output: JSON signal if in a zkfied vault, or empty (no-op) otherwise
-
+# Two input shapes on stdin, told apart by the toolCall key:
+#   Claude Code, Codex and Pi's extension (extensions/zkfy.ts): {tool_input: {file_path}}.
+#     Output: Claude Code's PostToolUse JSON (hookSpecificOutput.additionalContext) or nothing.
+#   Antigravity: {toolCall: {args: {TargetFile}}}. Output: {}, the only answer its PostToolUse
+#     takes, so the reminder goes to stderr; validate-zk-structure.sh carries it to the agent on
+#     the preceding PreToolUse instead.
 set -euo pipefail
 
-# Read the tool event from stdin
 EVENT=$(cat)
+HERE=$(cd "$(dirname "$0")" && pwd)
 
-# Extract the file path from the tool input
-FILE_PATH=$(echo "$EVENT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get('tool_input', {}).get('file_path', ''))
-except Exception:
-    print('')
-" 2>/dev/null)
-
-# Only proceed if we got a file path and it's a .md file
-if [[ -z "$FILE_PATH" || "${FILE_PATH##*.}" != "md" ]]; then
-    exit 0
+if printf '%s' "$EVENT" | jq -e '.toolCall' >/dev/null 2>&1; then
+  CLI=agy
+  FILE_PATH=$(printf '%s' "$EVENT" | jq -r '.toolCall.args.TargetFile // empty')
+else
+  CLI=claude
+  FILE_PATH=$(printf '%s' "$EVENT" | jq -r '.tool_input.file_path // empty')
 fi
+
+finish() {  # $1: the signal JSON (index_update_needed, note_path, reminder), or nothing
+  if [[ -n "${1:-}" ]]; then
+    text=$(printf '%s' "$1" | jq -r '[(.reminder // empty), (.note_path // empty | "Note: " + .)] | join(" ")')
+    if [[ "$CLI" == agy ]]; then
+      printf 'zkfy: %s\n' "$text" >&2
+    else
+      jq -n -c --arg text "zkfy: $text" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $text}}'
+    fi
+  fi
+  [[ "$CLI" == agy ]] && echo '{}'
+  exit 0
+}
+
+[[ -n "$FILE_PATH" && "${FILE_PATH##*.}" == "md" ]] || finish
 
 # Scoped vaults use the shared positive allowlist, including maps. No source scans.
-if python3 -B "$(dirname "$0")/../scripts/knowledge-hook.py" index "$FILE_PATH"; then
-    exit 0
+if SIGNAL=$(python3 -B "$HERE/../scripts/knowledge-hook.py" index "$FILE_PATH"); then
+  finish "$SIGNAL"
 else
-    status=$?
-    if [[ "$status" != 3 ]]; then
-        printf '%s\n' 'zkfy: scoped hook runtime unavailable; reminder skipped.' >&2
-        exit 0
-    fi
+  status=$?
+  if [[ "$status" != 3 ]]; then
+    printf '%s\n' 'zkfy: scoped hook runtime unavailable; reminder skipped.' >&2
+    finish
+  fi
 fi
 
-# Walk up the directory tree looking for a .claude/ sibling
-# This detects a zkfied vault without hardcoding any paths
+# Walk up the directory tree looking for a .claude/ sibling: a zkfied vault, without any hardcoded path
 SEARCH_DIR=$(dirname "$FILE_PATH")
 VAULT_ROOT=""
-
 while [[ "$SEARCH_DIR" != "/" && "$SEARCH_DIR" != "." ]]; do
-    if [[ -d "$SEARCH_DIR/.claude" ]]; then
-        VAULT_ROOT="$SEARCH_DIR"
-        break
-    fi
-    SEARCH_DIR=$(dirname "$SEARCH_DIR")
-done
-
-# Also check root-level .claude
-if [[ -z "$VAULT_ROOT" && -d "$SEARCH_DIR/.claude" ]]; then
+  if [[ -d "$SEARCH_DIR/.claude" ]]; then
     VAULT_ROOT="$SEARCH_DIR"
+    break
+  fi
+  SEARCH_DIR=$(dirname "$SEARCH_DIR")
+done
+if [[ -z "$VAULT_ROOT" && -d "$SEARCH_DIR/.claude" ]]; then
+  VAULT_ROOT="$SEARCH_DIR"
 fi
+[[ -n "$VAULT_ROOT" ]] || finish
 
-# If no zkfied vault found, exit silently (no-op)
-if [[ -z "$VAULT_ROOT" ]]; then
-    exit 0
-fi
-
-# Skip files in excluded directories (not actual notes)
+# Files in excluded directories are not notes
 EXCLUDED_PATTERNS="y.template|/raw/|/row/|/x.temp/|/docs/|/.obsidian/|/.claude/|/.agents/|/.prompts/|/.github/|/.instructions/|000.Index"
-if echo "$FILE_PATH" | grep -qE "$EXCLUDED_PATTERNS"; then
-    exit 0
+if printf '%s' "$FILE_PATH" | grep -qE "$EXCLUDED_PATTERNS"; then
+  finish
 fi
 
-# Emit a reminder signal for the LLM to update the vault index
-python3 -c "
-import json, sys
-signal = {
-    'index_update_needed': True,
-    'note_path': sys.argv[1],
-    'vault_root': sys.argv[2],
-    'reminder': 'Run vault-knowledge lint, then vault-knowledge build, to keep the generated catalog current'
-}
-print(json.dumps(signal))
-" "$FILE_PATH" "$VAULT_ROOT"
+finish "$(jq -n -c --arg path "$FILE_PATH" --arg root "$VAULT_ROOT" \
+  '{index_update_needed: true, note_path: $path, vault_root: $root, reminder: "Run vault-knowledge lint, then vault-knowledge build, to keep the generated catalog current"}')"

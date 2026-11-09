@@ -117,7 +117,7 @@ Return the path to the created transcript file."
 **Update task**: Mark "Generate structured Markdown" as `in_progress`
 
 **Read agent**: `<zkfy-root>/agents/markdown-file-agent.md`
-**Read prompt**: `~/.claude/prompts/crawler.prompt.md`
+**Read prompt**: `~/.claude/prompts/crawler.prompt.md`, only if it exists (an optional override of the agent's own rules)
 
 Use the Task tool to delegate to `general-purpose` subagent with:
 
@@ -125,7 +125,7 @@ Use the Task tool to delegate to `general-purpose` subagent with:
 Prompt: "You are delegated to act as the markdown-file-agent agent.
 
 Read the agent instructions at: <zkfy-root>/agents/markdown-file-agent.md
-Read the formatting rules at: ~/.claude/prompts/crawler.prompt.md
+Read the formatting rules at ~/.claude/prompts/crawler.prompt.md if that file exists; otherwise follow the agent file's own rules
 
 Then convert this source to structured Markdown:
 <source> = <URL | text | transcript file path>

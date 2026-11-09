@@ -17,7 +17,7 @@ model: inherit
 color: green
 mode: best-effort
 externalDependencies:
-  - "~/.claude/prompts/crawler.prompt.md"
+  - "~/.claude/prompts/crawler.prompt.md (optional override)"
   - "web-clipper plugin (command: web-clipper)"
 ---
 
@@ -59,7 +59,7 @@ RESET='\033[0m'
 
 - `source`: Web URL, raw text, file path, or video transcript from Phase 0
 - `output_dir`: Default `raw/`
-- `crawler_prompt`: Read `~/.claude/prompts/crawler.prompt.md` before starting (text and transcript sources)
+- `crawler_prompt`: optional — read `~/.claude/prompts/crawler.prompt.md` when it exists (text and transcript sources); this file's rules apply without it
 
 ## Output
 
@@ -70,7 +70,7 @@ RESET='\033[0m'
 
 ## Procedure
 
-### 1. Read Crawler Prompt First
+### 1. Read Crawler Prompt First (when present)
 
 ```bash
 echo -e "${BLUE}${BOLD}[1/6] Reading crawler prompt...${RESET}"
@@ -78,7 +78,7 @@ echo -e "${CYAN}  → ${DIM}~/.claude/prompts/crawler.prompt.md${RESET}"
 ```
 
 ```
-Read: ~/.claude/prompts/crawler.prompt.md
+Read: ~/.claude/prompts/crawler.prompt.md    (if it exists; otherwise continue with this file's rules)
 ```
 
 ### 2. Identify Source Type

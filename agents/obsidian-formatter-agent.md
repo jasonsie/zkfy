@@ -19,7 +19,7 @@ model: inherit
 color: green
 mode: best-effort
 externalDependencies:
-  - "~/.claude/prompts/obsidian-note.prompt.md"
+  - "~/.claude/prompts/obsidian-note.prompt.md (optional override)"
 ---
 
 # Obsidian Formatter Agent
@@ -79,7 +79,7 @@ Inputs are mode-discriminated. The caller (zk-note skill orchestrator) must alwa
 - `tags`: Cross-cutting tags from analysis (e.g., `[interview-prep, beginner]`)
 - `today_date`: Current date `YYYY-MM-DD`
 - `vault_root`: Root directory of the Obsidian vault
-- `obsidian_prompt`: Read `~/.claude/prompts/obsidian-note.prompt.md` before starting
+- `obsidian_prompt`: optional — `<vault_root>/docs/workflows/vault-authoring.md` when the vault has it, then `~/.claude/prompts/obsidian-note.prompt.md` when it exists; this file's skeletons apply without them
 
 **Atom-mode payload (when `note_mode = "atom"`):**
 
@@ -108,16 +108,21 @@ Inputs are mode-discriminated. The caller (zk-note skill orchestrator) must alwa
 
 ## Procedure
 
-### 1. Read Formatting Rules
+### 1. Read Formatting Rules (when present)
 
 ```bash
 echo -e "${BLUE}${BOLD}[1/5] Reading formatting rules...${RESET}"
-echo -e "${CYAN}  → ${DIM}~/.claude/prompts/obsidian-note.prompt.md${RESET}"
+echo -e "${CYAN}  → ${DIM}<vault_root>/docs/workflows/vault-authoring.md, ~/.claude/prompts/obsidian-note.prompt.md${RESET}"
 ```
 
 ```
-Read: ~/.claude/prompts/obsidian-note.prompt.md
+Read: <vault_root>/docs/workflows/vault-authoring.md    (if the vault has it)
+Read: ~/.claude/prompts/obsidian-note.prompt.md         (if it exists)
 ```
+
+Neither file is required: this file's skeletons are the rules. When one exists, its
+conventions (naming, metadata, placement) take precedence over the defaults below; say in
+the report which files were read.
 
 Your role is mechanical: take the distilled artifact from `conceptual-modeler-agent` and
 assemble the mode-appropriate skeleton (atom: Concept-First per ADR-0001 D5; thesis:
@@ -271,7 +276,7 @@ Return: note path, filename, mode, suggested MOC entries (MOC path + line).
 
 | Issue | Action | Terminal Output |
 |-------|--------|-----------------|
-| Prompt not found | Abort — cannot proceed without formatting rules | `echo -e "${RED}✗ ABORT:${RESET} obsidian-note.prompt.md not found"` |
+| Prompt not found | Proceed with this file's skeleton; say so in the report | `echo -e "${YELLOW}⚠${RESET} no formatting override found\n${DIM}  Using the agent's skeleton${RESET}"` |
 | Missing or invalid `note_mode` | Abort — caller must supply `note_mode` as `"atom"` or `"thesis"`. Heuristic detection from payload shape is unreliable; the modeler is the single source of truth. | `echo -e "${RED}✗ ABORT:${RESET} note_mode missing or not one of 'atom' / 'thesis'"` |
 | Missing domain or concept | Abort — caller must provide these | `echo -e "${RED}✗ ABORT:${RESET} Missing required input: domain or concept"` |
 | (atom mode) Missing required-core field (`one_line_definition`, `mental_model`, or `related_notes`) | Abort — atom skeleton cannot be assembled | `echo -e "${RED}✗ ABORT:${RESET} Missing atom required-core field from modeler output"` |

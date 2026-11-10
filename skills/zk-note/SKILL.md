@@ -316,6 +316,14 @@ If cross-pollination fails, warn but do not abort — the note is already create
 
 Delete only intermediate files this run created (`raw/src-*.md`, fetched transcripts). Never delete a source the user dropped into `raw/`, nor a clip written by the `web-clipper` plugin (`raw/<Page Title>.md` and its attachment folder); they stay as provenance. The one exception is `clip-to-zk`, which adopts its own clip and removes the raw copy after verification (ADR-0004).
 
+Keeping a source means tracking it, not leaving it untracked. When the vault is a git repository, the kept source lands with its note:
+
+- Write the note in the same checkout as the source. If the note is written in a linked worktree and the source sits in the main checkout, copy the source into the worktree at the same `raw/` path.
+- Commit the source in the same change as the note, so one review and one merge cover both.
+- After the merge, the main checkout still holds the untracked original, and `git pull` refuses to overwrite it. Remove that copy only when `cmp` shows it is byte-identical to the committed file; otherwise stop and tell the user.
+
+zk-note never commits on its own: list the source in the report so the user's commit includes it.
+
 Report completion (the `🧬 Mode` line is always present and reflects the modeler's
 classification; the `🪴 Spinoff candidates (not saved)` line is conditional on N > 0 and
 lists both atom-spinoffs and thesis-overflow spinoffs together):
@@ -327,6 +335,7 @@ lists both atom-spinoffs and thesis-overflow spinoffs together):
 🔗 Backlinks: <N> notes linked
 📑 Suggested MOC entries: <MOC path + line>
 🔄 Cross-updates: <N> existing notes enriched (user-approved only)
+📦 Source: <raw/ path> — <already tracked | to commit with the note | untracked: reason>
 🪴 Spinoff candidates (not saved): <concept — rationale list>   # only line if N > 0
 ```
 

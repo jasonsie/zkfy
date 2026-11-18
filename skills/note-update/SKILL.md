@@ -59,11 +59,26 @@ Report its `profile` and `matched_by`.
 
 ### 3. State
 
-`NU state "<N>"`, adding `--instruction-given` when the user gave an instruction. Keep its `dirty`.
+`NU state "<N>"`, adding `--instruction-given` when the user gave an instruction. Keep its `case` and
+`dirty`. A run that stopped earlier is found from git and GitHub, never from stored state; its `run`
+gives `<B>` (`branch`), `<W>` (`worktree`) and `<n>` (`pr.number`). Go on at `next_step`:
 
-- `case` A → step 4.
-- `case` B → step 5.
-- `case` C → stop: give an instruction, or edit `<N>` in Obsidian first, then rerun.
+| `next_step` | Go to |
+|---|---|
+| `plan-gate` | step 4; with `<W>` already there, step 5 skips `worktree new` |
+| `worktree` | step 5 |
+| `carry` | step 5's carry, with `<W>` from `run` |
+| `diff-gate` | step 7 |
+| `commit` | step 9's commit item: something is staged or committed, so the diff gate was approved |
+| `ship` | step 9's ship item |
+| `approve` | step 9's approve item |
+| `land-check` | step 9's land check |
+| `done` | step 10: the run already landed |
+| `owned` | stop with `reason`: another live session owns the worktree; never take it over |
+| `stop` | stop with `reason` (case C, or a base that can no longer be checked) |
+
+A gate the run already passed is not asked again. The plan gate is the exception: the approved plan is
+not recorded, so a run resumed before its edit shows the gate again.
 
 ### 4. Plan gate (case A)
 
@@ -103,7 +118,8 @@ own, since the worktree guard reads the command line:
 ai-dotfiles worktree new <B> --repo "<V>"
 ```
 
-`<W>` is the path it prints. When `dirty`, run `NU carry "<N>" "<W>"`. Done when it returns
+`<W>` is the path it prints. `names` dates the branch when origin already has it. When `dirty`, run
+`NU carry "<N>" "<W>"`. Done when it returns
 `identical: true`; keep its `sha256`.
 
 ### 6. Edit (case A; case B goes on at step 7)
@@ -193,6 +209,9 @@ In case B with a proposed map line, the options are those of the plan gate. Stop
      `git -C "<W>" commit -F <links message>`, then `git -C "<W>" add -- "<N>" <map>` and
      `git -C "<W>" commit -F <note message>`.
    - **No split:** `git -C "<W>" add -- "<N>" <links> <map>`, then `git -C "<W>" commit -F <note message>`.
+   - **Resumed here:** `git -C "<W>" log --oneline origin/<base>..HEAD` and `git -C "<W>" diff --cached
+     --stat` show which of these commits are done and what is staged; commit what is staged with its
+     own message, then go on with the commits not done.
 
    A commit the small-commits hook still refuses as over 300 lines (the note's own change alone) stops
    the run; its one-time retry is the user's call.

@@ -1,6 +1,6 @@
 ---
 name: note-update
-description: "Land an update to one vault note on main: your instruction (the agent edits after a plan gate) or your own Obsidian edit, carried through a worktree, a diff gate, commit, ship and approve, with your copy never overwritten."
+description: "Land an update to one vault note on main: your instruction (the agent edits after a plan gate) or your own Obsidian edit, carried through a worktree, with broken heading links repointed and one approved map line, then a diff gate, commit, ship and approve, with your copy never overwritten."
 disable-model-invocation: true
 argument-hint: "<note: path, filename or alias> [instruction] [--vault <root>]"
 ---
@@ -13,7 +13,9 @@ One run lands one **target note**'s update on the vault's base branch. Built so 
 - **case B:** you edited the note in the primary checkout (Obsidian) and give no instruction, and the
   run carries your edit.
 
-Case C (neither) stops at step 3.
+Case C (neither) stops at step 3. Either way, inbound links to a heading the update renamed or removed are
+repointed in the same PR, and one map line changes only when the user approves it. No other note gains
+a link.
 
 `<zkfy-root>` is this plugin's root: two levels above the folder this file was loaded from. Resolve every
 `<zkfy-root>/…` path to an absolute path before you run it.
@@ -25,7 +27,7 @@ Case C (neither) stops at step 3.
 Every edit and commit happens in the worktree `<W>`, named by its path in every command
 (`git -C "<W>" …`, `cd "<W>" && …`), because ship deletes it at the end. The session stays where it
 started. The run never edits the primary checkout `<V>`: only the land check writes there, at the
-end, and only as step 8 says.
+end, and only as step 9 says.
 
 **Gate.** In a CLI with a question dialog (AskUserQuestion), ask with Approve (Recommended) and
 Stop. Without one, print the gate and wait: only the reply "approve" passes.
@@ -71,8 +73,8 @@ the change would:
 
 - touch a clip note (`profile` clip) outside its frontmatter and `### Links`: a clip note's body
   stays verbatim (`<zkfy-root>/docs/ADR/0004-clip-mode-verbatim-notes.md`);
-- rename or remove a heading that an `inbound` entry's `heading` targets. Repointing those links is
-  not built yet, so keep the heading, or fix the links by hand first;
+- build on a dirty note whose `broken_by_edit` is not empty: the user's own edit already breaks those
+  links, and its commit comes first. Land it without an instruction (case B repoints them), then rerun;
 - rename, move or merge the note (the `vault-reorg` skill), or rebuild it from its source (`zk-note`).
 
 Otherwise show, in one gate:
@@ -81,11 +83,16 @@ Otherwise show, in one gate:
 - **Change:** what changes, section by section, naming every section it touches. A conversion names
   the target profile.
 - **Budget:** `budget.warnings` now, and what the change does to them. These are warnings only.
-- **Fallout:** the `inbound` links, with maps and heading links named.
+- **Fallout:** the `inbound` links, with maps and heading links named. Links to a heading the change
+  renames or removes are repointed in step 7.
+- **Map line**, when the change alters the note's title, aliases or summary and an `inbound` entry is
+  a map: the new text for that entry's `line` (its `text` now), one line for one map.
 - **Base**, when `dirty`: the user's uncommitted edit is the base, and it lands as its own commit
   before the agent's.
 
-Stop → end the run. Nothing is written and no worktree exists.
+Options: Approve (Recommended), plus Approve without the map line when one is proposed, and Stop. In
+plain text: "approve", "approve without map line", or anything else to stop. Stop → end the run.
+Nothing is written and no worktree exists.
 
 ### 5. Worktree
 
@@ -99,7 +106,7 @@ ai-dotfiles worktree new <B> --repo "<V>"
 `<W>` is the path it prints. When `dirty`, run `NU carry "<N>" "<W>"`. Done when it returns
 `identical: true`; keep its `sha256`.
 
-### 6. Edit (case A)
+### 6. Edit (case A; case B goes on at step 7)
 
 The main session edits `<W>/<N>` with the file-edit tool; the worktree guard refuses a subagent's
 writes in the session's worktree. Follow the plan, and these rules:
@@ -119,21 +126,38 @@ when:
 
 Otherwise fix `<W>/<N>` and rerun it.
 
-### 7. Diff gate
+### 7. Links and map line
+
+`NU links "<N>" "<W>"`. Its `broken` entries come from the ratchet's own issues; a `new` one is a link
+the update broke, and the commit would be refused with it.
+
+- **Heading:** decide each `new` heading's fate: renamed → its new heading; removed → the nearest
+  heading that stays, or `""` for the note itself. Then `NU repoint "<N>" "<W>" --rename "<OLD>"
+  "<NEW>"` (repeat `--rename` per heading) and rerun `NU links`. Done when no `new` entry is left.
+- **Block or frontmatter:** stop; those are not repointed here.
+
+The map line, when the plan gate approved it (case A), or when the user approves it at the diff gate
+(case B, which has no plan gate): `NU map-line "<N>" "<W>" --map "<map>" --line <line> --text "<new text>"`.
+
+### 8. Diff gate
 
 Show, in one gate:
 
 - **Diff:** `git -C "<W>" diff -- "<N>"`. In case A on a dirty note, show the user's edit
   (`git -C "<V>" diff -- "<N>"`) and the agent's (`git diff --no-index "<V>/<N>" "<W>/<N>"`) apart.
 - **Sections** (case A): the `edit-check` sections that are not `same`, and its `budget.warnings`.
-- **Other files touched:** every line of `git -C "<W>" status --porcelain` that is not `<N>`.
-  There should be none.
+- **Links:** `repoint`'s count and files, and the map line's old and new text.
+- **Other files touched:** every line of `git -C "<W>" status --porcelain` that is not `<N>`. They
+  must be exactly `repoint`'s `files` plus the approved map.
+- **Commits:** `NU commits "<N>" "<W>"`, adding `--sha256 <carry's sha256>` in case A on a dirty note. When `split` is true, the change lands
+  as two commits: first the heading renames with the repointed links, as
+  `docs(links): repoint <n> links to <note stem>'s renamed headings`, then the rest.
 - **Structural lint:** the entries whose `path` is `<N>` in `KNOW --vault "<W>" lint`, which lists
   the whole vault and exits 1 on any issue. Mark each one missing from
   `KNOW --vault "<W>" lint --snapshot head` as **new**; the ratchet hook refuses a commit with a new
   issue.
 - **Commit message**, per the `small-commits` rules. In case A on a dirty note there are two: the
-  user's edit first, then the agent's.
+  user's edit first, then the agent's. A split adds the links commit's message.
 
   ```text
   <subject_stub><what the edit achieves>
@@ -143,22 +167,29 @@ Show, in one gate:
   Verified: structural lint, <k> issues on <N>, none new; ratchet hook and catalog check at commit and ship
   ```
 
-Stop → end the run. `<V>` is untouched; `<W>` keeps the edit. Say so, and that
+In case B with a proposed map line, the options are those of the plan gate. Stop → end the run.
+`<V>` is untouched; `<W>` keeps the edit. Say so, and that
 `ai-dotfiles worktree rm <worktree folder name> --force` drops the worktree.
 
-### 8. Land
+### 9. Land
 
-"approve" at the diff gate runs this whole step with no further questions:
+"approve" at the diff gate runs this whole step with no further questions. `<links>` are `repoint`'s
+`files` and `<map>` the approved map, when there are any.
 
 1. Restore stray catalog edits, which make the ratchet hook refuse: `git -C "<W>" restore --` each
    file that `git -C "<W>" diff --name-only -- .claude/index.md .claude/index .claude/QUALITY.md
    .claude/lint-baseline.json` lists.
 2. Write each message to a file outside the vault (the scratchpad, or `mktemp`). The ratchet hook
    validates each commit's staged link graph and stages the rebuilt catalogs.
-   - **Case A on a dirty note:** `NU stage-carried "<N>" "<W>" --sha256 <carry's sha256>`, then
-     `git -C "<W>" commit -F <user's message>`, then `git -C "<W>" add -- "<N>"` and
-     `git -C "<W>" commit -F <agent's message>`.
-   - **Otherwise:** `git -C "<W>" add -- "<N>"`, then `git -C "<W>" commit -F <file>`.
+   - **Case A on a dirty note, first:** `NU stage-carried "<N>" "<W>" --sha256 <carry's sha256>`, then
+     `git -C "<W>" commit -F <user's message>`.
+   - **A split:** `NU stage-renames "<N>" "<W>"` with the same `--rename` pairs as `repoint`, then
+     `git -C "<W>" commit -F <links message>`, then `git -C "<W>" add -- "<N>" <map>` and
+     `git -C "<W>" commit -F <note message>`.
+   - **No split:** `git -C "<W>" add -- "<N>" <links> <map>`, then `git -C "<W>" commit -F <note message>`.
+
+   A commit the small-commits hook still refuses as over 300 lines (the note's own change alone) stops
+   the run; its one-time retry is the user's call.
 3. Write the PR body per the `pr` skill to a file outside the vault. The title is the note
    commit's subject; in case A on a dirty note, the agent's. Run `cd "<W>" && ai-dotfiles ship --dry-run --title "<subject>" --body-file <body>`,
    then the same without `--dry-run`. Ship runs the vault's Verify check. `<n>` is the PR number on
@@ -170,7 +201,7 @@ Stop → end the run. `<V>` is untouched; `<W>` keeps the edit. Say so, and that
    `difference`: the user edited `<N>` again during the run. Show the difference; nothing was
    touched, and the choice is the user's.
 
-### 9. Report
+### 10. Report
 
-The note and its profile, the case, the PR's link, and the land check's result (`fast_forwarded`,
-`restored`, `superseded`).
+The note and its profile, the case, the links repointed and the map line, the PR's link, and the land
+check's result (`fast_forwarded`, `restored`, `superseded`).

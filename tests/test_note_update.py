@@ -54,6 +54,7 @@ FILES = {
     MANY: MANY_LINKS,
     TOOLS_MAP: "---\nType: structure\n---\n- [[Tools-Thesis-Themes#Short Theme]] themes\n",
     "111.cs/CS-Defective.md": "---\nType: literature\nCategories: [CS]\n---\n### Abstract\nNo date, no links.\n",
+    "111.cs/Badname.md": page(),
     "555.tools/Tools-Also-Defective.md": "---\nDate: 2026-11-01\nType: literature\n---\n### Abstract\nA.\n### Links\n",
     "111.cs/CS-Links-In.md": page(body="See [[Tools-Agent-Trust-Pyramid#Abstract]] and [[Tools-Agent-Trust-Pyramid]]."),
     "raw/Source.md": "a source\n",
@@ -362,8 +363,14 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual((result["case"], result["next_step"]), ("C", "fixes"))
         self.assertEqual({(d["rule"], d["detail"]) for d in result["defects"]},
                          {("field", "Date"), ("heading", "Links")})
-        self.assertTrue(all(d["fix"] for d in result["defects"]))
+        self.assertTrue(all(d["fix"] and d["pickable"] for d in result["defects"]))
         self.assertNotIn("defects", self.ok("state", "111.cs/CS-Defective.md", "--instruction-given"))
+
+    def test_state_lists_a_rename_defect_without_offering_it(self):
+        self.prs()
+        (defect,) = self.ok("state", "111.cs/Badname.md")["defects"]
+        self.assertEqual((defect["rule"], defect["pickable"]), ("filename", False))
+        self.assertIn("vault-reorg", defect["why"])
 
     def test_state_says_a_note_without_defects_needs_an_instruction(self):
         self.prs()
@@ -463,6 +470,16 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual([s["heading"] for s in check["sections"] if s["status"] != "same"], ["Links"])
         self.put(self.vault, NOTE, page("thesis", "My edit, typed on."))
         self.refused("edit-check", NOTE, str(self.tree), "--sha256", sha, why="changed since the carry")
+
+    def test_edit_check_accepts_only_the_keys_the_picked_fixes_add(self):
+        note = "111.cs/CS-Defective.md"
+        self.put(self.tree, note, (self.tree / note).read_text(encoding="utf-8").replace(
+            "Type: literature\n", "Date: 2026-11-18\nType: literature\n"))
+        self.assertEqual(self.ok("edit-check", note, str(self.tree))["problems"], ["frontmatter keys added: Date"])
+        self.assertEqual(self.ok("edit-check", note, str(self.tree), "--adds", "Date")["problems"], [])
+        self.edited(note, "Categories: [CS]\n", "Categories: [CS]\nSub-Categories: [x]\n")
+        self.assertEqual(self.ok("edit-check", note, str(self.tree), "--adds", "Date")["problems"],
+                         ["frontmatter keys added: Sub-Categories"])
 
     def test_edit_check_flags_a_clip_body_change_but_not_its_links(self):
         clip = "555.tools/Tools-Clip-Page.md"

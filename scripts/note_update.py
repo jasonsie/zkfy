@@ -18,7 +18,7 @@ carried through a linked worktree and landed on main.
                                      the primary copy's uncommitted edit already breaks
   carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
                                      check the two are byte-identical
-  edit-check NOTE WORKTREE [--sha256 S]
+  edit-check NOTE WORKTREE [--sha256 S] [--adds KEY ...]
                                      the worktree's copy against the edit's base (the carried copy, sha256
                                      S, or the worktree's HEAD): each section same, changed, added or
                                      removed; frontmatter keys; Src and Link; a clip body; the budget
@@ -448,7 +448,7 @@ def worktree_step(root, tree, work, note, case, change, slug, run):
         return {"OPEN": "approve", "MERGED": "land-check"}.get(state, "ship"), pr, None
     copy, head = K.read_file(tree, note), git(tree, "show", f"HEAD:{note}").stdout
     if copy == head:
-        return {"A": "plan-gate", "B": "carry"}.get(case, "stop"), None, None if case != "C" else CASE_C_REASON
+        return {"A": "plan-gate", "B": "carry"}.get(case, "fixes"), None, None
     if copy == K.read_file(root, note):  # the carried copy, not edited yet
         return ("plan-gate" if case == "A" else "diff-gate"), None, None
     if change and case == "A":  # stage-carried needs carry's sha256, which only the stopped session had
@@ -458,19 +458,25 @@ def worktree_step(root, tree, work, note, case, change, slug, run):
     return "diff-gate", None, None
 
 
-CASE_C_REASON = "case C: no instruction and no uncommitted edit"
+UNPICKABLE = {"filename": "a rename belongs to the vault-reorg skill, never to note-update"}
 
 
 def defects_of(root, note):
-    """The note's own structural defects, from knowledge.py's lint: the issues `.claude/QUALITY.md`
-    reports, each with its repair hint. Content length stays a judgement call, never a defect here."""
-    return [{"rule": i["rule"], "detail": i["detail"], "fix": i["fix"]}
-            for i in K.Corpus(K.Snapshot(root)).issues() if i["path"] == note]
+    """The note's own structural defects, from knowledge.py's live lint of the primary checkout (what
+    `.claude/QUALITY.md` is generated from, and may lag), each with its repair hint and whether this
+    run can make it. Content length stays a judgement call, never a defect here."""
+    found = []
+    for issue in K.Corpus(K.Snapshot(root)).issues():
+        if issue["path"] == note:
+            why = UNPICKABLE.get(issue["rule"])
+            found.append({"rule": issue["rule"], "detail": issue["detail"], "fix": issue["fix"],
+                          "pickable": why is None, **({"why": why} if why else {})})
+    return found
 
 
 def start_step(case):
-    """(next step, reason) of a run with nothing done yet."""
-    return {"A": ("plan-gate", None), "B": ("worktree", None)}.get(case, ("stop", CASE_C_REASON))
+    """(next step, reason) of a run with nothing done yet: case C picks its fixes first."""
+    return {"A": ("plan-gate", None), "B": ("worktree", None)}.get(case, ("fixes", None))
 
 
 def fresh_step(root, note, case, change, slug):
@@ -528,9 +534,9 @@ def cmd_state(root, args):
         run.setdefault("pushed", bool(pr))
     if case == "C":  # the note's defects become the fixes to pick from, then the run goes on as case A
         result["defects"] = defects_of(root, note)
-        if step == "stop" and reason == CASE_C_REASON:
-            step, reason = ("fixes", None) if result["defects"] else (
-                "stop", f"{note} has no structural defects; give an instruction for what should change")
+        if step == "fixes" and not any(d["pickable"] for d in result["defects"]):
+            step = "stop"
+            reason = f"{note} has no structural defects to fix here; give an instruction for what should change"
     return {**result, "run": run, "next_step": step, **({"reason": reason} if reason else {})}
 
 
@@ -676,8 +682,10 @@ def cmd_edit_check(root, args):
     found += [{"heading": key[0], "status": "added"} for key in new_texts if key not in old_texts]
     profile = {"before": profile_of(scope, old), "after": profile_of(scope, new)}
     # Mode is the profile: a conversion's new or changed Mode is reported once, as the profile change.
-    problems = [f"frontmatter keys {how}: {', '.join(k for k in keys[how] if k != 'Mode')}"
-                for how in ("added", "removed") if [k for k in keys[how] if k != "Mode"]]
+    # A key a picked case-C fix adds (--adds) is the user's repair, not a backfill.
+    allowed = {"added": {"Mode", *(args.adds or [])}, "removed": {"Mode"}}
+    problems = [f"frontmatter keys {how}: {', '.join(k for k in keys[how] if k not in allowed[how])}"
+                for how in ("added", "removed") if [k for k in keys[how] if k not in allowed[how]]]
     problems += ["frontmatter keys reordered"] if keys["reordered"] else []
     problems += [f"{k} changed; provenance stays as it is" for k in provenance]
     if profile["before"] != profile["after"]:
@@ -984,6 +992,8 @@ def main(argv=None):
     check.add_argument("note")
     check.add_argument("worktree", help="the linked worktree holding the edited copy")
     check.add_argument("--sha256", help="carry's sha256, when the edit builds on a carried copy")
+    check.add_argument("--adds", action="append", metavar="KEY",
+                       help="a frontmatter key a picked case-C fix adds; repeatable")
     command = sub.add_parser("links")
     command.add_argument("note")
     command.add_argument("worktree")

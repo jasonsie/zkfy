@@ -67,7 +67,7 @@ gives `<B>` (`branch`), `<W>` (`worktree`) and `<n>` (`pr.number`). Go on at `ne
 
 | `next_step` | Go to |
 |---|---|
-| `fixes` | step 3a |
+| `fixes` | step 3a; with `<W>` already there, step 5 skips `worktree new` |
 | `plan-gate` | step 4; with `<W>` already there, step 5 skips `worktree new` |
 | `worktree` | step 5 |
 | `carry` | step 5's carry, with `<W>` from `run` |
@@ -78,7 +78,7 @@ gives `<B>` (`branch`), `<W>` (`worktree`) and `<n>` (`pr.number`). Go on at `ne
 | `land-check` | step 9's land check |
 | `done` | step 10: the run already landed |
 | `owned` | stop with `reason`: another live session owns the worktree; never take it over |
-| `stop` | stop with `reason`; for a case-C note with no defects, ask for an instruction first (step 3a) |
+| `stop` | stop with `reason`; when it says the note has no defects to fix, ask for an instruction (step 3a) |
 
 A gate the run already passed is not asked again. The plan gate is the exception: the approved plan is
 not recorded, so a run resumed before its edit shows the gate again.
@@ -86,9 +86,11 @@ not recorded, so a run resumed before its edit shows the gate again.
 ### 3a. Pick fixes (case C)
 
 `defects` lists the note's own structural defects, each with its `rule`, `detail` and `fix`. Ask which to
-make: in a dialog, `multiSelect`, one option per defect (its `fix` in plain words), naming any beyond
-four in the question; the dialog's own free-text answer is the user's instruction instead. Without a
-dialog, print a numbered list and wait for numbers, the user's own words, or "stop".
+make: in a dialog, `multiSelect`, one option per `pickable` defect (its `fix` in plain words), naming
+any beyond four in the question; the dialog's own free-text answer is the user's instruction instead.
+Without a dialog, print a numbered list and wait for numbers, the user's own words, or "stop". A defect
+that is not `pickable` is named with its `why` (a rename is the `vault-reorg` skill's), never offered.
+A picked `field` fix is the user's repair: it adds that key, and step 6 passes it to `edit-check`.
 
 With no defects, say so and ask what should change instead.
 
@@ -147,11 +149,12 @@ writes in the session's worktree. Follow the plan, and these rules:
   in `<zkfy-root>/agents/obsidian-formatter-agent.md` (step 4a atom, 4b thesis).
 - Touch only the sections the plan names. Every other section stays byte-identical.
 - Keep every frontmatter key in its order, plus the filename, `Src` and `Link`. Strip nothing and
-  backfill nothing; a planned conversion sets `Mode` and nothing else.
+  backfill nothing; a planned conversion sets `Mode`, and a picked case-C `field` fix adds its key, and
+  nothing else.
 - Section headings are 2–4 words, and the vault's authoring rules apply.
 
-Then `NU edit-check "<N>" "<W>"`, adding `--sha256 <carry's sha256>` when step 5 carried. Done
-when:
+Then `NU edit-check "<N>" "<W>"`, adding `--sha256 <carry's sha256>` when step 5 carried, and
+`--adds <key>` for each frontmatter key a picked case-C fix adds. Done when:
 
 - its `problems` is empty, apart from a `profile` change the plan made;
 - every section it marks changed, added or removed is one the plan named.

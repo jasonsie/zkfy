@@ -88,12 +88,16 @@ The one eligible note a note-update run lands a change to.
 _Avoid_: the file, the page
 
 **Plan gate**:
-The approval before anything is written for an instruction: the target note, its profile, the change section by section, budget warnings and the inbound links it affects.
+The approval before anything is written for an instruction: the target note, its profile, the change section by section, budget warnings, the inbound links it affects and any proposed map line.
 _Avoid_: preview, proposal
 
 **Diff gate**:
-The approval after the change sits in its own worktree: the note's diff, other files touched, the structural lint and the commit message; "approve" there runs the git flow to the end.
+The approval after the change sits in its own worktree: the note's diff, the repointed links and any map line, other files touched, the structural lint, the commit split and the commit messages; "approve" there runs the git flow to the end.
 _Avoid_: review step, confirmation
+
+**Repoint**:
+To change only the heading anchor of an inbound link whose heading the update renamed or removed, so the link still reaches the target note; no link is added or sent to another note.
+_Avoid_: redirect (a reorg's absorbed-note links), rewrite, retarget
 
 **Carry**:
 To copy the user's uncommitted edit of the target note from the primary checkout into the run's worktree, byte for byte, leaving the primary copy as it is.

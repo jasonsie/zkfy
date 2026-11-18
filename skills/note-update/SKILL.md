@@ -137,8 +137,9 @@ the update broke, and the commit would be refused with it.
   "<NEW>"` (repeat `--rename` per heading) and rerun `NU links`. Done when no `new` entry is left.
 - **Block or frontmatter:** stop; those are not repointed here.
 
-The map line, when the plan gate approved it (case A), or when the user approves it at the diff gate
-(case B, which has no plan gate): `NU map-line "<N>" "<W>" --map "<map>" --line <line> --text "<new text>"`.
+Case A, when the plan gate approved a map line: `NU map-line "<N>" "<W>" --map "<map>" --line <line>
+--text "<new text>"`. Case B has no plan gate, so its map line is proposed at the diff gate and applied
+in step 9.
 
 ### 8. Diff gate
 
@@ -148,6 +149,9 @@ Show, in one gate:
   (`git -C "<V>" diff -- "<N>"`) and the agent's (`git diff --no-index "<V>/<N>" "<W>/<N>"`) apart.
 - **Sections** (case A): the `edit-check` sections that are not `same`, and its `budget.warnings`.
 - **Links:** `repoint`'s count and files, and the map line's old and new text.
+- **Map line** (case B), when the user's edit changed the note's title, aliases or summary: run
+  `NU plan "<N>"`; for an `inbound` entry that is a map, propose the new text for its `line` (its
+  `text` now). Nothing is applied before "approve".
 - **Other files touched:** every line of `git -C "<W>" status --porcelain` that is not `<N>`. They
   must be exactly `repoint`'s `files` other than `<N>`, plus the approved map.
 - **Commits:** `NU commits "<N>" "<W>"`, adding `--sha256 <carry's sha256>` in case A on a dirty note. When `split` is true, the change lands
@@ -179,7 +183,8 @@ In case B with a proposed map line, the options are those of the plan gate. Stop
 
 1. Restore stray catalog edits, which make the ratchet hook refuse: `git -C "<W>" restore --` each
    file that `git -C "<W>" diff --name-only -- .claude/index.md .claude/index .claude/QUALITY.md
-   .claude/lint-baseline.json` lists.
+   .claude/lint-baseline.json` lists. In case B approved with its map line, run `NU map-line` now,
+   then `NU commits` again: its `split` decides the commits below.
 2. Write each message to a file outside the vault (the scratchpad, or `mktemp`). The ratchet hook
    validates each commit's staged link graph and stages the rebuilt catalogs.
    - **Case A on a dirty note, first:** `NU stage-carried "<N>" "<W>" --sha256 <carry's sha256>`, then

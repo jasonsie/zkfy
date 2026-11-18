@@ -3,6 +3,9 @@
 carried through a linked worktree and landed on main.
 
   resolve NOTE                       the note's vault-relative path (exact path only) and its profile
+  state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
+                                     the primary checkout), C (neither); no other file's status counts
+  names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
 
 --vault is the primary checkout, never inferred from the current folder. Each subcommand prints one
 JSON object on stdout; a stop also prints its reason on stderr.
@@ -16,7 +19,8 @@ import argparse
 import importlib.util
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import subprocess
 import sys
 
@@ -32,6 +36,9 @@ def _load_knowledge():
 
 
 K = sys.modules.get("knowledge") or _load_knowledge()
+
+WORK_NAME = re.compile(r"[a-z][a-z0-9]*/[a-z0-9][a-z0-9-]*")  # ai-dotfiles worktree-guard's <type>/<slug>
+
 
 class Refused(Exception):
     """A step's rule said no; nothing was changed. `data` joins the JSON beside the reason."""
@@ -55,6 +62,12 @@ def git(root, *args, data=None, check=True):
 
 def out(root, *args):
     return git(root, *args).stdout.decode().strip()
+
+
+def blob(root, rev, note):
+    """The blob id of `note` at `rev`, or '' when `rev` has no such file."""
+    p = git(root, "rev-parse", "--verify", "--quiet", f"{rev}:{note}", check=False)
+    return p.stdout.decode().strip() if p.returncode == 0 else ""
 
 
 # --- the vault and the note -----------------------------------------------------------------------
@@ -94,6 +107,29 @@ def note_of(root, value):
     return name, scope
 
 
+def status_of(root, note):
+    """The two-letter porcelain status of `note` in the primary checkout, '' when clean."""
+    entries = git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", note).stdout.split(b"\0")
+    return entries[0][:2].decode() if entries and entries[0] else ""
+
+
+def tracked_change(root, note):
+    """Whether the primary copy of `note` has uncommitted edits; refuses what note-update does not carry."""
+    code = status_of(root, note)
+    if code == "??":
+        raise Refused(f"{note} is not tracked; note-update changes notes already on the base branch")
+    if "U" in code or code in ("AA", "DD"):
+        raise Refused(f"{note} has merge conflicts; resolve them first")
+    if "D" in code:
+        raise Refused(f"{note} is deleted in the primary checkout")
+    if code[:1] in ("A", "R", "C"):
+        raise Refused(f"{note} is staged as {'added' if code[0] == 'A' else 'renamed or copied'}; "
+                      f"note-update changes one existing note in place")
+    if not blob(root, "HEAD", note):
+        raise Refused(f"{note} is not on the checked-out branch")
+    return code
+
+
 # --- subcommands -----------------------------------------------------------------------------------
 
 def cmd_resolve(root, args):
@@ -106,17 +142,41 @@ def cmd_resolve(root, args):
     return {"note": note, "profile": profile}
 
 
+def cmd_state(root, args):
+    note, _ = note_of(root, args.note)
+    code = tracked_change(root, note)
+    case = "A" if args.instruction_given else ("B" if code else "C")
+    return {"note": note, "case": case, "dirty": bool(code), "status": code,
+            "instruction_given": args.instruction_given}
+
+
+def cmd_names(root, args):
+    note, _ = note_of(root, args.note)
+    parts = PurePosixPath(note).parts
+    slug = re.sub(r"[^a-z0-9]+", "-", parts[-1][:-3].lower()).strip("-")
+    branch = f"docs/update-{slug}"
+    if not slug or not WORK_NAME.fullmatch(branch):
+        raise Refused(f"{note}: its filename gives no ASCII branch name; name the worktree by hand "
+                      f"(ai-dotfiles worktree new docs/update-<slug>)")
+    top = parts[0] if len(parts) > 1 else ""
+    scope = re.sub(r"[^a-z0-9]+", "-", re.sub(r"^\d+\.", "", top).lower()).strip("-") or "vault"
+    return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}
+
+
 # --- the command line ------------------------------------------------------------------------------
 
-COMMANDS = {"resolve": cmd_resolve}
+COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--vault", required=True, help="the vault's primary checkout; never inferred from cwd")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve",):
+    for name in ("resolve", "names"):
         sub.add_parser(name).add_argument("note", help="the note's exact vault-relative path")
+    s = sub.add_parser("state")
+    s.add_argument("note")
+    s.add_argument("--instruction-given", action="store_true", help="the user gave an instruction (case A)")
     args = parser.parse_args(argv)
     try:
         root = primary(args.vault)

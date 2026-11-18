@@ -131,6 +131,30 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("not the primary checkout", result["error"])
 
+    # --- state ---
+
+    def test_state_finds_case_b_from_the_note_alone(self):
+        self.put(self.vault, ".obsidian/workspace.json", '{"open": 1}\n')
+        self.put(self.vault, "111.cs/CS-Harness.md", page("atom", "Someone else's edit."))
+        self.assertEqual(self.ok("state", NOTE)["case"], "C")
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        state = self.ok("state", NOTE)
+        self.assertEqual((state["case"], state["dirty"], state["status"]), ("B", True, " M"))
+        self.assertEqual(self.ok("state", NOTE, "--instruction-given")["case"], "A")
+
+    def test_state_refuses_an_untracked_note(self):
+        self.put(self.vault, "555.tools/Tools-New.md", page())
+        self.refused("state", "555.tools/Tools-New.md", why="not tracked")
+
+    # --- names ---
+
+    def test_names_derive_the_branch_scope_and_subject_stub(self):
+        self.assertEqual(self.ok("names", NOTE), {"note": NOTE, "branch": "docs/update-tools-agent-trust-pyramid",
+                                                  "scope": "tools", "subject_stub": "docs(tools): "})
+        names = self.ok("names", MAP)
+        self.assertEqual((names["branch"], names["scope"]), ("docs/update-cs-map", "index"))
+        self.refused("names", "111.cs/筆記.md", why="no ASCII branch name")
+
 
 if __name__ == "__main__":
     unittest.main()

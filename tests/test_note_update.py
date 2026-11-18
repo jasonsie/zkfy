@@ -29,6 +29,7 @@ THEMES = ("---\nDate: 2026-11-01\nType: literature\nMode: thesis\nCategories: [T
           "### Short Theme\n" + "word " * 150 + "\n### Right Theme\n" + "字" * 300 + "\n### Links\n")
 
 THEMES_NOTE = "555.tools/Tools-Thesis-Themes.md"
+TOOLS_MAP = "000.Index/Tools-Map.md"
 MANY = "111.cs/CS-Many-Links.md"
 MANY_LINKS = ("---\nDate: 2026-11-01\nType: literature\nCategories: [CS]\nAliases: []\n---\n### Abstract\n"
               + "".join(f"- [[Tools-Thesis-Themes#Short Theme]] point {i}\n" for i in range(30))
@@ -50,6 +51,7 @@ FILES = {
     "111.cs/CS-Long-Atom.md": LONG_ATOM,
     THEMES_NOTE: THEMES,
     MANY: MANY_LINKS,
+    TOOLS_MAP: "---\nType: structure\n---\n- [[Tools-Thesis-Themes#Short Theme]] themes\n",
     "111.cs/CS-Links-In.md": page(body="See [[Tools-Agent-Trust-Pyramid#Abstract]] and [[Tools-Agent-Trust-Pyramid]]."),
     "raw/Source.md": "a source\n",
     "docs/workflows/vault-authoring.md": "rules\n",
@@ -329,9 +331,10 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(self.ok("links", THEMES_NOTE, str(self.tree))["broken"], [])
         self.rename_theme()
         result = self.ok("links", THEMES_NOTE, str(self.tree))
-        self.assertEqual(len(result["broken"]), 33)
+        self.assertEqual(len(result["broken"]), 34)
         self.assertEqual({(b["from"], b["heading"], b["kind"], b["new"]) for b in result["broken"]},
-                         {(MANY, "Short Theme", "heading", True), (THEMES_NOTE, "Short Theme", "heading", True)})
+                         {(MANY, "Short Theme", "heading", True), (THEMES_NOTE, "Short Theme", "heading", True),
+                          (TOOLS_MAP, "Short Theme", "heading", True)})
         self.assertEqual(sorted({b["line"] for b in result["broken"] if b["from"] == MANY}), list(range(8, 40)))
         self.assertIn("Brief Theme", result["headings"])
         self.assertNotEqual(self.staged_new_issues(), [])
@@ -339,7 +342,8 @@ class NoteUpdateTest(unittest.TestCase):
     def test_repoint_rewrites_only_the_anchor_and_the_graph_validates(self):
         self.rename_theme()
         result = self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
-        self.assertEqual((len(result["repointed"]), result["files"], result["left"]), (33, [MANY, THEMES_NOTE], []))
+        self.assertEqual((len(result["repointed"]), result["files"], result["left"]),
+                         (34, [TOOLS_MAP, MANY, THEMES_NOTE], []))
         self.assertIn("Summary, see [[#Brief Theme]].", (self.tree / THEMES_NOTE).read_text(encoding="utf-8"))
         text = (self.tree / MANY).read_text(encoding="utf-8")
         self.assertEqual(text, MANY_LINKS.replace("#Short Theme", "#Brief Theme").replace("#Short%20Theme", "#Brief%20Theme"))
@@ -382,8 +386,9 @@ class NoteUpdateTest(unittest.TestCase):
         self.rename_theme()
         self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
         result = self.ok("commits", THEMES_NOTE, str(self.tree))
-        self.assertEqual((result["lines"]["note"], result["lines"]["links"], result["split"]), (4, 64, False))
-        self.assertEqual(result["files"], {"links": [MANY], "map": []})
+        self.assertEqual((result["lines"]["note"], result["lines"]["links"], result["lines"]["map"], result["split"]),
+                         (4, 64, 2, False))
+        self.assertEqual(result["files"], {"links": [MANY], "map": [TOOLS_MAP]})
 
     def numstat(self, *args):
         return sum(int(a) + int(d) for a, d, _ in (row.split("\t") for row in
@@ -394,9 +399,13 @@ class NoteUpdateTest(unittest.TestCase):
         self.put(self.tree, THEMES_NOTE, THEMES.replace("### Short Theme", "### Brief Theme")
                  .replace("### Links\n", body + "### Links\n"))
         self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
+        self.ok("map-line", THEMES_NOTE, str(self.tree), "--map", TOOLS_MAP, "--line", "4",
+                "--text", "- [[Tools-Thesis-Themes#Brief Theme]] themes, the brief one")
         self.assertTrue(self.ok("commits", THEMES_NOTE, str(self.tree))["split"])
         staged = self.ok("stage-renames", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
-        self.assertEqual(staged["staged"], [THEMES_NOTE, MANY])
+        self.assertEqual(staged["staged"], [THEMES_NOTE, TOOLS_MAP, MANY])
+        self.assertEqual(self.git(self.tree, "show", f":{TOOLS_MAP}"),  # the repoint only, not the map line
+                         "---\nType: structure\n---\n- [[Tools-Thesis-Themes#Brief Theme]] themes")
         self.assertEqual(self.git(self.tree, "show", f":{THEMES_NOTE}"),  # the heading and its self-link only
                          THEMES.replace("Short Theme", "Brief Theme").rstrip("\n"))
         first = self.numstat("--cached")
@@ -404,6 +413,16 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(self.staged_new_issues(), [])  # stages the rest
         second = self.numstat("--cached")
         self.assertTrue(first < 300 and second < 300 and first + second > 300, (first, second))
+
+    def test_stage_renames_keeps_a_removed_heading_until_the_second_commit(self):
+        body = "".join(f"line {i}\n" for i in range(300))
+        self.put(self.tree, THEMES_NOTE, THEMES.replace("### Short Theme\n" + "word " * 150 + "\n", "")
+                 .replace("### Links\n", body + "### Links\n"))
+        self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Right Theme")
+        self.ok("stage-renames", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Right Theme")
+        first = self.git(self.tree, "show", f":{THEMES_NOTE}")
+        self.assertEqual((first.count("### Short Theme"), first.count("### Right Theme")), (1, 1))
+        self.assertIn("[[#Right Theme]]", first)
 
     def test_stage_renames_refuses_while_a_link_stays_broken(self):
         self.rename_theme()

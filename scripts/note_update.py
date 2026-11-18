@@ -22,15 +22,15 @@ carried through a linked worktree and landed on main.
   repoint NOTE WORKTREE --rename OLD NEW ...
                                      rewrite the anchor of each broken link to heading OLD as NEW, the
                                      note's own links included (an empty NEW links the note itself,
-                                     except from the note); no link is added or retargeted
+                                     except from the note); no link is added or sent to another note
   map-line NOTE WORKTREE --map M --line L --text T
                                      replace line L of map M, which links NOTE, with T: one line, no new link
   commits NOTE WORKTREE [--sha256 S] the edit's changed lines (note, links, map) and whether they pass
                                      the 300-line commit limit together
   stage-renames NOTE WORKTREE --rename OLD NEW ...
-                                     over the limit: stage the note's base with only its headings renamed,
-                                     plus the repointed links, as the first commit; the ratchet's check
-                                     must pass on that snapshot
+                                     over the limit, the first commit: HEAD's copy of the note and of each
+                                     linking file (maps too) with only the broken links repointed and the
+                                     renamed headings renamed; the ratchet's check must pass on it
   stage-carried NOTE WORKTREE --sha256 S
                                      stage the primary copy, as carried (sha256 S), as the worktree's
                                      index entry, so the hand edit commits before the agent's edit
@@ -620,12 +620,12 @@ def changed_lines(old, new):
 
 
 def worktree_changes(tree, note, scope):
-    """{path: changed lines} of the worktree's tracked changes other than `note` and the catalogs."""
+    """{path: changed lines} of the worktree's tracked changes to eligible notes other than `note`."""
     found = {}
     for row in git(tree, "diff", "--numstat", "-z", "--no-renames", "HEAD").stdout.split(b"\0"):
         if row:
             added, deleted, path = row.decode("utf-8").split("\t", 2)
-            if path != note and not path.startswith(".claude/"):
+            if path != note and scope.eligible(path):
                 found[path] = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
     return found
 
@@ -646,34 +646,40 @@ def cmd_commits(root, args):
 def cmd_stage_renames(root, args):
     note, scope = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
-    head = git(tree, "show", f"HEAD:{note}").stdout
-    renames = {K.anchor_slug(old): new for old, new in args.rename if new}
-    raw = head.decode("utf-8").splitlines(keepends=True)
-    renamed = []
-    base = K.Note.parse(note, head, scope)
-    corpus = K.Corpus(K.Snapshot(tree))
-    for number, link, text in base.sites:  # the note's own links to a renamed heading follow it
-        new_text = retarget(text, renames) if corpus.resolve(link, note)[1] == [note] else None
-        if new_text is not None:
-            raw[number - 1] = raw[number - 1].replace(text, new_text, 1)
-    for number, heading in base.headings:
-        new = renames.get(K.anchor_slug(heading))
-        if new:
-            line = raw[number - 1]
-            raw[number - 1] = re.match(r"#{1,6}\s+", line)[0] + new + line[len(line.rstrip("\r\n")):]
-            renamed.append({"old": heading, "new": new})
-    oid = git(tree, "hash-object", "-w", f"--path={note}", "--stdin", data="".join(raw).encode("utf-8")).stdout
-    entry = index_entry(tree, note)
-    links = sorted(p for p in worktree_changes(tree, note, scope) if not scope.is_map(p))
-    git(tree, "update-index", "--cacheinfo", entry[0] if entry else "100644", oid.decode().strip(), note)
-    if links:
-        git(tree, "add", "--", *links)
+    corpus = K.Corpus(K.Snapshot(tree))  # resolves HEAD's link targets against the edited note
+    renames = {K.anchor_slug(old): new for old, new in args.rename}
+    staged, renamed = [], []
+    for path in [note, *sorted(worktree_changes(tree, note, scope))]:
+        head = git(tree, "show", f"HEAD:{path}").stdout
+        parsed = K.Note.parse(path, head, scope)
+        raw = head.decode("utf-8").splitlines(keepends=True)
+        # The first commit's copy: HEAD's, with each link the edit broke retargeted as repoint did; an
+        # approved map line and the rest of the edit wait for the second commit.
+        for number, link, text in parsed.sites:
+            status, hits = corpus.resolve(link, path)
+            new_text = retarget(text, renames) if hits == [note] and status == "anchor" else None
+            if new_text is not None:
+                raw[number - 1] = raw[number - 1].replace(text, new_text, 1)
+        if path == note:  # a renamed heading takes its new name; a removed one stays until the second commit
+            kept = {K.anchor_slug(h) for _, h in parsed.headings}
+            for number, heading in parsed.headings:
+                new = renames.get(K.anchor_slug(heading))
+                if new and K.anchor_slug(new) not in kept:
+                    line = raw[number - 1]
+                    raw[number - 1] = re.match(r"#{1,6}\s+", line)[0] + new + line[len(line.rstrip("\r\n")):]
+                    renamed.append({"old": heading, "new": new})
+        data = "".join(raw).encode("utf-8")
+        if path == note or data != head:
+            oid = git(tree, "hash-object", "-w", f"--path={path}", "--stdin", data=data).stdout.decode().strip()
+            entry = index_entry(tree, path)
+            git(tree, "update-index", "--cacheinfo", entry[0] if entry else "100644", oid, path)
+            staged.append(path)
     report, _ = K.run_hook(tree, "report-only")  # the ratchet's own check, without staging catalogs
     if report["new_issues"]:
-        git(tree, "restore", "--staged", "--", note, *links)
+        git(tree, "restore", "--staged", "--", *staged)
         raise Refused(f"the renames and link fixes alone still break {len(report['new_issues'])} link(s); "
                       f"repoint them first. Nothing stays staged", {"new_issues": report["new_issues"]})
-    return {"note": note, "staged": [note, *links], "renamed": renamed}
+    return {"note": note, "staged": staged, "renamed": renamed}
 
 
 def base_branch(root):

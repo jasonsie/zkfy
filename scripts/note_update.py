@@ -206,45 +206,51 @@ def profile_of(scope, note):
     return "map" if scope.is_map(note.path) else str(note.meta.get("Mode", "legacy"))
 
 
+PREAMBLE = "(preamble)"  # the title of the text before a note's first heading
+
+
 def sections(note):
     """The body split at headings of level 1-3, fence-aware: [(title, [(number, line)])], heading line
-    first; the text before the first heading is "(preamble)" and is left out when blank."""
+    first; the PREAMBLE section is left out when blank."""
     raw = dict(note.lines)
     titles = {n: h for n, h in note.headings if re.match(r"#{1,3}\s", raw.get(n, ""))}
-    found, title, lines = [], "(preamble)", []
+    found, title, lines = [], PREAMBLE, []
     for number, line in note.lines:
         if number in titles:
             found.append((title, lines))
             title, lines = titles[number], []
         lines.append((number, line))
     found.append((title, lines))
-    return [(t, ls) for t, ls in found if t != "(preamble)" or any(x.strip() for _, x in ls)]
+    return [(t, ls) for t, ls in found if t != PREAMBLE or any(x.strip() for _, x in ls)]
 
 
-CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
-WORD = re.compile(r"[A-Za-z0-9]+(?:['\u2019][A-Za-z]+)?")
+CJK = re.compile(r"[\u4e00-\u9fff]")
+# vault-lint Check 11's reserved headings; the scope's thesis summaries join them (knowledge.py's default).
+RESERVED = {"definition", "mental model", "why it matters", "boundary", "code", "links", "執行摘要", "附錄", "appendix"}
+SUMMARIES = ["執行摘要", "Executive Summary", "Abstract"]
 
 
-def size(lines):
-    """Chinese characters plus English words, CLAUDE.md's count: fenced code, embeds and URLs left out."""
+def budget_count(lines):
+    """vault-lint Check 9's count: CJK ideographs plus whitespace tokens holding an ASCII letter, over
+    the lines outside fenced code (inline code, which K.prose_lines drops, is left out too)."""
     text = "\n".join(line for _, line in K.prose_lines(lines))
-    text = re.sub(r"!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)|\]\([^)]*\)|https?://\S+", " ", text)
-    text = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", text)
-    return len(CJK.findall(text)) + len(WORD.findall(CJK.sub(" ", text)))
+    return len(CJK.findall(text)) + sum(bool(re.search(r"[A-Za-z]", w)) for w in text.split())
 
 
 def budget(note, scope):
-    """The body budget of the note's profile (CLAUDE.md, ADR-0002 D5): warnings only, never a stop."""
-    parts = [(title, lines[1:] if title != "(preamble)" else lines) for title, lines in sections(note)]
+    """The body budget of the note's profile (CLAUDE.md, ADR-0002 D5): warnings only, never a stop. A
+    note with no Mode counts as atom, as vault-lint's Check 9 does."""
+    parts = [(title, lines[1:] if title != PREAMBLE else lines) for title, lines in sections(note)]
     profile = profile_of(scope, note)
-    if profile == "atom":
-        count = sum(size(lines) for title, lines in parts if title.casefold() not in ("mental model", "links"))
+    if profile in ("atom", "legacy"):
+        count = sum(budget_count(lines) for title, lines in parts
+                    if title.casefold() not in ("mental model", "links"))
         return {"rule": "atom", "count": count, "limit": 500,
                 "warnings": [f"atom body: {count} over the 500 ceiling"] if count > 500 else []}
     if profile == "thesis":
-        skip = {s.casefold() for s in scope.config.get("thesis_summaries", ["執行摘要"])}
-        skip |= {"(preamble)", "mental model", "links", "附錄", "appendix"}
-        themes = [{"heading": title, "count": size(lines)} for title, lines in parts if title.casefold() not in skip]
+        skip = RESERVED | {s.casefold() for s in scope.config.get("thesis_summaries", SUMMARIES)} | {PREAMBLE}
+        themes = [{"heading": title, "count": budget_count(lines)} for title, lines in parts
+                  if title.casefold() not in skip]
         return {"rule": "thesis", "themes": themes, "range": [200, 1500],
                 "warnings": [f"theme {t['heading']!r}: {t['count']}, outside 200-1500" for t in themes
                              if not 200 <= t["count"] <= 1500]}

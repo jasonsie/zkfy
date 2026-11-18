@@ -235,7 +235,11 @@ class NoteUpdateTest(unittest.TestCase):
                                             {"heading": "Right Theme", "count": 300}])
         self.assertEqual(len(budget["warnings"]), 1)
         self.assertIn("Short Theme", budget["warnings"][0])
-        self.assertEqual(self.ok("plan", "111.cs/CS-Old-Note.md")["budget"], {"rule": None, "warnings": []})
+        self.assertEqual(self.ok("plan", MAP)["budget"], {"rule": None, "warnings": []})
+
+    def test_plan_counts_a_note_with_no_mode_as_atom_like_vault_lint(self):
+        budget = self.ok("plan", "111.cs/CS-Old-Note.md")["budget"]
+        self.assertEqual((budget["rule"], budget["count"], budget["warnings"]), ("atom", 1, []))
 
     def test_plan_lists_the_inbound_links_and_the_headings_they_target(self):
         plan = self.ok("plan", NOTE)

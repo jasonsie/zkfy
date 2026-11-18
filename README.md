@@ -26,7 +26,7 @@ INPUT → [VIDEO TRANSCRIPTION] → MARKDOWN GENERATION → ANALYSIS → FORMATT
 4. **Phase 2.5**: Cross-pollinate — propose backlinks for 5-10 existing related notes (dry run); apply only the ones you approve
 5. **Phase 3**: Validate — run `vault-knowledge lint`, then `vault-knowledge build` to regenerate the catalog
 
-### Five Core Operations (LLM Wiki Pattern)
+### Six Core Operations (LLM Wiki Pattern)
 
 Each is a skill, invoked by its bare name: `/zkfy:source-to-zk` in Claude Code, `/skill:source-to-zk` in Pi, `/source-to-zk` in Antigravity; Codex lists them under `/skills`.
 
@@ -37,6 +37,7 @@ Each is a skill, invoked by its bare name: `/zkfy:source-to-zk` in Claude Code, 
 | **Query** | `query-to-note` | Search vault → synthesize → file as permanent note → cross-pollinate (proposals) → lint + build |
 | **Lint** | `vault-lint` | Detect contradictions, orphans, stale content, concept gaps → proposed fixes applied only on approval |
 | **Reorganize** | `vault-reorg` | Survey → interview → mapping → weave + ledger → apply → stage → confirm commit |
+| **Update** | `note-update` | One note to `main`: your instruction, a fix you pick or your Obsidian edit → plan and diff gates → worktree, commit, ship, approve → your copy kept |
 
 ### Specialized Agents
 
@@ -57,6 +58,7 @@ Each is a skill, invoked by its bare name: `/zkfy:source-to-zk` in Claude Code, 
 - **Cross-pollination**: New notes propose backlinks to existing related notes; you approve what is applied
 - **Vault catalog**: `.claude/index.md` and related catalog files are generated only by `vault-knowledge build`; `.claude/log.md` is frozen history and is no longer written
 - **Semantic linting**: 12 health checks (contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps, Concept-First conformance, Hybrid Mode conformance)
+- **Note updates**: `/note-update <note>` takes one note from "change this" (or "I already changed it") to merged on `main`, repoints the heading links the change breaks, resumes a stopped run from git and GitHub, and never overwrites your Obsidian copy
 - **Reorganization**: `/vault-reorg` merges notes that explain the same concept by weaving them into one note, checked by a unit ledger so no content is lost; it stages its own files and commits only on your yes
 - **Progress tracking**: Visual feedback for each pipeline phase
 
@@ -102,14 +104,14 @@ claude plugin marketplace add jasonsie/web-clipper
 /plugin install zkfy --marketplace jasonsie/zkfy
 
 # Codex
-codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.8.1
+codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.9.0
 codex plugin add zkfy@zkfy-marketplace
 
 # Pi
-pi install git:github.com/jasonsie/zkfy@zkfy--v1.8.1
+pi install git:github.com/jasonsie/zkfy@zkfy--v1.9.0
 
 # Antigravity
-agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.8.1
+agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.9.0
 ```
 
 Without ai-dotfiles, put the plugin's `bin/vault-knowledge` on your PATH yourself; Claude Code
@@ -211,6 +213,16 @@ Keep a source exactly as captured instead of distilling it.
 ```
 
 It writes a `Mode: clip` note: the body is the source verbatim, with zkfy frontmatter, a Train-Case filename in a domain sub-folder, and a `### Links` section appended. Images are renamed to match the note. Backlinks to related notes are proposed, never applied without approval. The `raw/` copy is removed only after the new note passes verification and lint. It needs the `web-clipper` plugin command. One source per run. Design: `docs/ADR/0004-clip-mode-verbatim-notes.md`.
+
+#### `note-update` — Update one note and land it
+
+Change one existing note and land it on `main` without hand-running git.
+
+```bash
+/zkfy:note-update <path | filename | alias> ["instruction"] [--vault <root>]
+```
+
+With an instruction, the agent plans the change, shows a plan gate, then edits the note in its own worktree. With no instruction after you edited the note in Obsidian, it carries your edit. With neither, it lists the note's structural defects for you to pick fixes from. Links to a heading the change renamed or removed are repointed in the same PR; one map line changes only when you approve it. At the diff gate, "approve" commits, ships (the vault's Verify check runs), approves and merges the PR, and fast-forwards your checkout only when your copy is byte-identical to what merged. A stopped run resumes from git and GitHub when you rerun the same command. It needs ai-dotfiles and `gh`. Design: GitHub issue #13.
 
 #### `vault-reorg` — Reorganize the vault
 
@@ -325,7 +337,8 @@ The plugin follows ai-dotfiles' `portable-plugin` rules; a feature a CLI cannot 
 
 | | Claude Code | Codex | Pi | Antigravity |
 |---|---|---|---|---|
-| Skills (11) | yes, as `/zkfy:<skill>` | yes | yes, as `/skill:<skill>` | yes, as `/<skill>` |
+| Skills (12) | yes, as `/zkfy:<skill>` | yes | yes, as `/skill:<skill>` | yes, as `/<skill>` |
+| `note-update`'s gates and git flow (needs ai-dotfiles and `gh`) | yes, gates as dialogs | yes, gates as plain-text replies | yes, gates as plain-text replies | yes, gates as plain-text replies |
 | `vault-knowledge` on PATH | the plugin's `bin/`, and ai-dotfiles' link | ai-dotfiles' link | ai-dotfiles' link | ai-dotfiles' link |
 | Hooks (vault guard, catalog reminder) | yes | yes, after trusting them once in `/hooks` | yes, through `extensions/zkfy.ts` | yes (`hooks.json`); the reminder arrives with the write's approval, since Antigravity's PostToolUse carries nothing back to the agent |
 | MCP server `notion` | yes (`.mcp.json`) | yes (`.mcp.json`) | yes, `extensions/zkfy.ts` registers it | yes (`mcp_config.json`) |
@@ -372,17 +385,19 @@ zkfy/
 │   ├── vault-index/             # Catalog generation via vault-knowledge build
 │   ├── vault-lint/              # 12 semantic health checks (methods in references/checks.md)
 │   ├── vault-reorg/             # Reorganization passes: interview, weave, unit ledger, apply
+│   ├── note-update/             # One note to main: plan and diff gates, worktree, ship, approve, land check
 │   ├── x-learn-study-sop/       # 4-phase study SOP
 │   └── terminal-colors/         # Standardized output formatting
 ├── scripts/
 │   ├── knowledge.py             # Scoped vault CLI: search, read, build, lint, reorg
 │   ├── reorg.py                 # Reorganization subcommands: survey, units, plan, ledger, apply
-│   └── clip_note.py             # clip-to-zk's file operations
+│   ├── clip_note.py             # clip-to-zk's file operations
+│   └── note_update.py           # note-update's mechanical steps: resolve, state, carry, repoint, land-check
 ├── hooks/
 │   ├── hooks.json               # PreToolUse / PostToolUse hooks (Claude Code, Codex)
 │   ├── validate-zk-structure.sh # Vault structure guard
 │   └── signal-index-update.sh   # Catalog maintenance reminder
-└── tests/                       # unittest: knowledge, reorg, clip_note, the launcher, the hooks, the Pi extension, the portable invariants
+└── tests/                       # unittest: knowledge, reorg, clip_note, note_update, the launcher, the hooks, the Pi extension, the portable invariants
 ```
 
 ### Agent Delegation

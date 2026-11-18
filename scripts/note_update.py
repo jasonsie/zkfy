@@ -6,8 +6,10 @@ carried through a linked worktree and landed on main.
                                      alias) and its profile; several matches list the candidates
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts.
-                                     Also where a stopped run stands, from git and GitHub (no stored
-                                     state): its worktree and owner, its PR, and `next_step`
+                                     Also where a stopped run stands, with no state file of its own: its
+                                     worktree (git, worktree-guard's records), its owner, whether it is
+                                     pushed, its PR (gh, run in the vault), and `next_step`; fetches
+                                     origin's base only when a merged PR's commit is missing
   names NOTE                         the branch docs/update-<stem-kebab> (dated when origin has it), the
                                      commit scope, a subject stub
   plan NOTE                          what the plan gate shows: the profile, size-budget warnings, the
@@ -51,7 +53,8 @@ blob, after checking it is still what merged.
 
 Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why) ·
 3 resolve found several notes ("candidates"; pick one by its path).
-Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligible notes, search).
+Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligible notes, search); git,
+and for state, gh and ps, and ai-dotfiles worktree-guard's claim and sidecar records.
 """
 from __future__ import annotations
 
@@ -342,8 +345,9 @@ def run_slug(note):
     return re.sub(r"[^a-z0-9]+", "-", PurePosixPath(note).stem.lower()).strip("-")
 
 
-def run_name(slug):
-    """A run's work name: docs/update-<slug>, or the dated one `names` gives when origin had it taken."""
+def run_branch_pattern(slug):
+    """A run's work name: docs/update-<slug>, or the dated one `names` gives when origin had it taken
+    (-YYYYMMDD, then -YYYYMMDD-2 ...)."""
     return re.compile(rf"docs/update-{re.escape(slug)}(?:-\d{{8}}(?:-\d+)?)?")
 
 
@@ -390,7 +394,7 @@ def owner_of(worktree):
     if claim.get("started") and process_start(pid) != claim["started"]:
         return None
     return {"cli": str(claim.get("cli", "agent")), "session": str(claim.get("session", "?")), "pid": pid,
-            "mine": pid in ancestors()}
+            "shared": bool(claim.get("shared")), "mine": pid in ancestors()}
 
 
 def run_worktrees(root, slug):
@@ -406,7 +410,7 @@ def run_worktrees(root, slug):
         except (OSError, ValueError, AttributeError):
             work = None
         work = work or ("docs/" + path.name[len("docs-"):] if path.name.startswith("docs-") else path.name)
-        if run_name(slug).fullmatch(work):
+        if run_branch_pattern(slug).fullmatch(work):
             found.append((path, work))
     return found
 
@@ -418,7 +422,7 @@ def pull_requests(root, slug):
                        cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if p.returncode:
         raise GitError("gh pr list: " + ((p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1]))
-    found = [pr for pr in json.loads(p.stdout or "[]") if run_name(slug).fullmatch(pr.get("headRefName", ""))]
+    found = [pr for pr in json.loads(p.stdout or "[]") if run_branch_pattern(slug).fullmatch(pr.get("headRefName", ""))]
     return sorted(found, key=lambda pr: -pr["number"])
 
 
@@ -427,7 +431,7 @@ def pr_summary(pr):
             "merge_commit": (pr.get("mergeCommit") or {}).get("oid")}
 
 
-def worktree_step(root, tree, work, note, case, change, slug):
+def worktree_step(root, tree, work, note, case, change, slug, run):
     """The next step of a run whose worktree exists. Staging happens only after "approve", so a staged
     change, or a commit, means the diff gate was passed."""
     base = base_branch(root)
@@ -437,45 +441,50 @@ def worktree_step(root, tree, work, note, case, change, slug):
     if staged or (ahead and unstaged):
         return "commit", None, None
     if ahead:
+        run["pushed"] = on_origin(root, work)
         pr = next((pr for pr in pull_requests(root, slug) if pr["headRefName"] == work), None)
         state = pr and pr["state"]
         return {"OPEN": "approve", "MERGED": "land-check"}.get(state, "ship"), pr, None
     copy, head = K.read_file(tree, note), git(tree, "show", f"HEAD:{note}").stdout
     if copy == head:
-        return {"A": "plan-gate", "B": "carry"}.get(case, "stop"), None, None if case != "C" else CASE_C
+        return {"A": "plan-gate", "B": "carry"}.get(case, "stop"), None, None if case != "C" else CASE_C_REASON
     if copy == K.read_file(root, note):  # the carried copy, not edited yet
         return ("plan-gate" if case == "A" else "diff-gate"), None, None
-    if change:
+    if change and case == "A":  # stage-carried needs carry's sha256, which only the stopped session had
         return "stop", None, (f"the edit's base cannot be checked after a stop: your copy of {note} has uncommitted "
                               f"edits and the worktree's copy differs from it. Drop the worktree "
                               f"(ai-dotfiles worktree rm {tree.name} --force) and rerun")
     return "diff-gate", None, None
 
 
-CASE_C = "case C (no instruction, no uncommitted edit) is not built yet: give an instruction, or edit the note first"
+CASE_C_REASON = "case C (no instruction, no uncommitted edit) is not built yet: give an instruction, or edit the note first"
+
+
+def start_step(case):
+    """(next step, reason) of a run with nothing done yet."""
+    return {"A": ("plan-gate", None), "B": ("worktree", None)}.get(case, ("stop", CASE_C_REASON))
 
 
 def fresh_step(root, note, case, change, slug):
-    """The next step when no worktree holds a run: an open PR is approved, a merged one not yet in the
-    primary checkout is land-checked, a run landed exactly at HEAD is done; anything else starts anew."""
+    """The next step when no worktree holds a run: an open PR is approved; the newest merged one goes to
+    the land check while its merge commit is not in HEAD (the land check lands it, or shows how the copy
+    diverged); a run landed exactly at HEAD is done in case C; anything else starts anew."""
     for pr in pull_requests(root, slug):
         if pr["state"] == "OPEN":
             return "approve", pr, None
-        if pr["state"] != "MERGED" or not (pr.get("mergeCommit") or {}).get("oid"):
+        oid = pr_summary(pr)["merge_commit"]
+        if pr["state"] != "MERGED" or not oid:
             continue
-        oid = pr["mergeCommit"]["oid"]
         head = out(root, "rev-parse", "HEAD")
         if oid == head and case == "C":
             return "done", pr, None
         if git(root, "cat-file", "-e", f"{oid}^{{commit}}", check=False).returncode:
-            git(root, "fetch", "--quiet", "origin", base_branch(root), check=False)
-        landed = git(root, "merge-base", "--is-ancestor", oid, head, check=False).returncode == 0
-        if not landed and git(root, "cat-file", "-e", f"{oid}^{{commit}}", check=False).returncode == 0:
-            brought = {blob(root, c, note) for c in out(root, "rev-list", oid, "--not", head, "--", note).split()}
-            if not change or file_blob(root, note) in brought | {blob(root, oid, note)}:
-                return "land-check", pr, None
-        break  # only the newest merged run can still be landing
-    return {"A": "plan-gate", "B": "worktree"}.get(case, "stop"), None, None if case != "C" else CASE_C
+            git(root, "fetch", "--quiet", "origin", base_branch(root), check=False)  # the merge's objects
+        if git(root, "merge-base", "--is-ancestor", oid, head, check=False).returncode:
+            return "land-check", pr, None
+        break  # landed already: a new run
+    step, reason = start_step(case)
+    return step, None, reason
 
 
 def cmd_state(root, args):
@@ -494,21 +503,21 @@ def cmd_state(root, args):
         tree, work = trees[0]
         owner = owner_of(tree)
         run = {"branch": work, "worktree": str(tree), "owner": owner}
-        if owner and not owner["mine"]:
+        if owner and not owner["mine"] and not owner["shared"]:  # a shared worktree any session may use
             step = "owned"
             reason = (f"{owner['cli']} session {owner['session'][:8]} owns {tree.name}; finish the run there, "
                       f"or wait for that session to end. No takeover")
         else:
-            step, pr, reason = worktree_step(root, tree, work, note, case, change, slug)
+            step, pr, reason = worktree_step(root, tree, work, note, case, change, slug, run)
     elif slug:
         step, pr, reason = fresh_step(root, note, case, change, slug)
         if pr:
             run = {"branch": pr["headRefName"], "worktree": None, "owner": None}
     else:
-        step = {"A": "plan-gate", "B": "worktree"}.get(case, "stop")
-        reason = None if case != "C" else CASE_C
+        step, reason = start_step(case)
     if run is not None:
         run["pr"] = pr_summary(pr) if pr else None
+        run.setdefault("pushed", bool(pr))
     return {**result, "run": run, "next_step": step, **({"reason": reason} if reason else {})}
 
 

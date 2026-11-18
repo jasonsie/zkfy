@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -253,11 +252,12 @@ class NoteUpdateTest(unittest.TestCase):
     def meta(self):
         (self.tree.parent / f"{self.tree.name}.json").write_text(json.dumps({"work": self.BRANCH}))
 
-    def claim(self, pid):
+    def claim(self, pid, **extra):
         claims = self.guard / "claims"
         claims.mkdir(parents=True, exist_ok=True)
-        key = hashlib.sha1(str(self.tree).encode()).hexdigest()[:20]
-        (claims / f"{key}.json").write_text(json.dumps({"session": "abcdef123456", "cli": "claude", "pid": pid}))
+        key = hashlib.sha1(str(self.tree).encode()).hexdigest()[:20]  # worktree-guard's claim_file()
+        (claims / f"{key}.json").write_text(json.dumps({"session": "abcdef123456", "cli": "claude", "pid": pid,
+                                                         **extra}))
 
     def step(self, *args):
         result = self.ok("state", NOTE, *args)
@@ -285,8 +285,9 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(self.step("--instruction-given")[0], "plan-gate")  # case A: the edit is not made yet
         self.put(self.tree, NOTE, page("thesis", "My edit. The agent's edit."))
         step, result = self.step("--instruction-given")
-        self.assertEqual(step, "stop")                                      # a dirty base that cannot be checked
+        self.assertEqual(step, "stop")                                      # case A: carry's base is not recorded
         self.assertIn("cannot be checked", result["reason"])
+        self.assertEqual(self.step()[0], "diff-gate")                       # case B: the land check guards it
 
     def test_state_next_step_for_a_clean_case_a_edit(self):
         self.meta()
@@ -301,11 +302,17 @@ class NoteUpdateTest(unittest.TestCase):
         self.put(self.tree, NOTE, page("thesis", "The agent's edit."))
         self.git(self.tree, "commit", "-qam", "docs(tools): edit")
         self.prs()
-        self.assertEqual(self.step()[0], "ship")
+        step, result = self.step()
+        self.assertEqual((step, result["run"]["pushed"]), ("ship", False))
         self.git(self.tree, "push", "-q", "origin", f"HEAD:refs/heads/{self.BRANCH}")
+        step, result = self.step()
+        self.assertEqual((step, result["run"]["pushed"]), ("ship", True))   # pushed, no PR yet: ship opens it
         self.prs((7, "OPEN", self.BRANCH, None))
         step, result = self.step()
         self.assertEqual((step, result["run"]["pr"]["number"]), ("approve", 7))
+        self.prs((7, "MERGED", self.BRANCH, self.git(self.tree, "rev-parse", "HEAD")))
+        self.assertEqual(self.step()[0], "land-check")                      # merged, worktree still there
+        self.prs((7, "OPEN", self.BRANCH, None))
         self.drop_tree()                                                    # ship deleted it
         self.assertEqual(self.step()[0], "approve")
 
@@ -320,13 +327,14 @@ class NoteUpdateTest(unittest.TestCase):
         self.put(self.vault, NOTE, page("thesis", "A new edit, later."))
         self.assertEqual(self.step()[0], "worktree")                        # a landed PR never captures a new run
 
-    def test_state_ignores_an_old_merge_the_copy_does_not_match(self):
-        self.merge(page("thesis", "Merged long ago."))
+    def test_state_sends_a_diverged_copy_to_the_land_check_that_shows_it(self):
+        self.merge(page("thesis", "What merged."))
         merged = self.git(self.tree, "rev-parse", "HEAD")
         self.drop_tree()
         self.prs((7, "MERGED", self.BRANCH, merged))
-        self.put(self.vault, NOTE, page("thesis", "A new edit on the old base."))
-        self.assertEqual(self.step()[0], "worktree")
+        self.put(self.vault, NOTE, page("thesis", "Typed on after the carry."))
+        self.assertEqual(self.step()[0], "land-check")
+        self.refused("land-check", NOTE, why="differs from what merged")
 
     def test_state_stops_on_another_sessions_worktree(self):
         self.meta()
@@ -341,6 +349,10 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertNotEqual(self.step()[0], "owned")
         self.claim(2 ** 22 + 12345)                                          # an owner that is gone
         self.assertIsNone(self.step()[1]["run"]["owner"])
+        self.claim(other.pid, shared=True)                                   # the person shared it
+        step, result = self.step()
+        self.assertNotEqual(step, "owned")
+        self.assertTrue(result["run"]["owner"]["shared"])
 
     # --- names ---
 

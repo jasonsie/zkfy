@@ -17,6 +17,11 @@ carried through a linked worktree and landed on main.
                                      S, or the worktree's HEAD): each section same, changed, added or
                                      removed; frontmatter keys; Src and Link; a clip body; the budget
                                      after. Facts only: `problems` lists rule breaks
+  links NOTE WORKTREE                the inbound links the update breaks, from the ratchet's own issues;
+                                     `new` marks one the worktree's HEAD does not break
+  repoint NOTE WORKTREE --rename OLD NEW ...
+                                     rewrite the anchor of each broken link to heading OLD as NEW (an
+                                     empty NEW links the note itself); no link is added or retargeted
   stage-carried NOTE WORKTREE --sha256 S
                                      stage the primary copy, as carried (sha256 S), as the worktree's
                                      index entry, so the hand edit commits before the agent's edit
@@ -39,7 +44,7 @@ Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligibl
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 import difflib
 import hashlib
 import importlib.util
@@ -51,7 +56,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 
 def _load_knowledge():
@@ -486,6 +491,78 @@ def cmd_stage_carried(root, args):
     return {"note": note, "worktree": str(tree), "staged": oid, "sha256": args.sha256}
 
 
+def cmd_links(root, args):
+    note, _ = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    now = K.Corpus(K.Snapshot(tree))
+    before = anchor_breaks(K.Corpus(K.Snapshot(tree, "head")), note)  # what the ratchet compares with
+    broken = []
+    for path, link in sorted(anchor_breaks(now, note)):
+        anchor = unquote(link).partition("#")[2]
+        lines = [line for line, target, _ in now.notes[path].sites if target == link]
+        kind = "block" if anchor.startswith("^") else "heading" if lines else "frontmatter"
+        broken += [{"from": path, "link": link, "heading": anchor, "kind": kind, "line": line,
+                    "new": (path, link) not in before} for line in lines or [None]]
+    return {"note": note, "broken": broken, "headings": [h for _, h in now.notes[note].headings]}
+
+
+def retarget(text, renames):
+    """The link `text` with its heading anchor renamed by `renames` ({anchor slug: new heading, '' for
+    none}), or None when no rename applies. Only the anchor changes: an alias or md-link label stays."""
+    if text.endswith("]]"):
+        start = text.index("[[") + 2
+        target, bar, alias = text[start:-2].partition("|")
+        escape = "\\" if target.endswith("\\") else ""  # a table cell's escaped pipe
+        base, hashmark, anchor = target[:len(target) - len(escape)].partition("#")
+        new = renames.get(K.anchor_slug(anchor)) if hashmark else None
+        return None if new is None else text[:start] + base + (f"#{new}" if new else "") + escape + bar + alias + "]]"
+    start = text.rindex("(") + 1
+    base, hashmark, anchor = text[start:-1].partition("#")
+    new = renames.get(K.anchor_slug(unquote(anchor))) if hashmark else None
+    return None if new is None else text[:start] + base + (f"#{quote(new)}" if new else "") + ")"
+
+
+def cmd_repoint(root, args):
+    note, _ = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    corpus = K.Corpus(K.Snapshot(tree))
+    headings = {K.anchor_slug(h) for _, h in corpus.notes[note].headings}
+    for _, new in args.rename:
+        if new and K.anchor_slug(new) not in headings:
+            raise Refused(f"{new!r} is not a heading of {note} in the worktree")
+    renames = {K.anchor_slug(old): new for old, new in args.rename}
+    edits, left = defaultdict(list), []
+    for path, (line, link, text), status in inbound_sites(corpus, note):
+        new_text = retarget(text, renames) if status == "anchor" else None
+        if new_text is not None:
+            edits[path].append((line, text, new_text))
+        elif status == "anchor":
+            left.append({"from": path, "line": line, "link": link})
+    originals = {path: K.read_file(tree, path) for path in edits}
+    for path, changes in edits.items():
+        raw = originals[path].decode("utf-8").splitlines(keepends=True)
+        for line, old, new in changes:
+            if old not in raw[line - 1]:
+                raise Refused(f"{path}:{line}: the link {old!r} is not on that line as read; nothing was written")
+            raw[line - 1] = raw[line - 1].replace(old, new, 1)
+        write_atomic(K.safe_path(tree, path), "".join(raw).encode("utf-8"))
+    after = K.Corpus(K.Snapshot(tree))
+
+    def targets(c, path):
+        return sorted(tuple(c.resolve(t, path)[1]) for t in c.notes[path].links)
+
+    still = {(p, link) for p, link in anchor_breaks(after, note) if p in edits} - {(x["from"], x["link"]) for x in left}
+    moved = [path for path in edits if targets(corpus, path) != targets(after, path)]
+    if still or moved:
+        for path, data in originals.items():
+            write_atomic(K.safe_path(tree, path), data)
+        raise Refused(f"repointing would leave links broken or point them elsewhere ({sorted(still) or moved}); "
+                      f"every file was put back")
+    return {"note": note, "repointed": [{"from": path, "line": line, "old": old, "new": new}
+                                        for path, changes in edits.items() for line, old, new in changes],
+            "files": sorted(edits), "left": left}
+
+
 def base_branch(root):
     """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
     p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
@@ -566,8 +643,8 @@ def cmd_land_check(root, args):
 # --- the command line ------------------------------------------------------------------------------
 
 COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
-            "carry": cmd_carry, "edit-check": cmd_edit_check, "stage-carried": cmd_stage_carried,
-            "land-check": cmd_land_check}
+            "carry": cmd_carry, "edit-check": cmd_edit_check, "links": cmd_links, "repoint": cmd_repoint,
+            "stage-carried": cmd_stage_carried, "land-check": cmd_land_check}
 
 
 def main(argv=None):
@@ -587,6 +664,15 @@ def main(argv=None):
     check.add_argument("note")
     check.add_argument("worktree", help="the linked worktree holding the edited copy")
     check.add_argument("--sha256", help="carry's sha256, when the edit builds on a carried copy")
+    command = sub.add_parser("links")
+    command.add_argument("note")
+    command.add_argument("worktree")
+    for name in ("repoint",):
+        command = sub.add_parser(name)
+        command.add_argument("note")
+        command.add_argument("worktree")
+        command.add_argument("--rename", nargs=2, action="append", required=True, metavar=("OLD", "NEW"),
+                             help="a heading the edit renamed (NEW) or removed (NEW empty); repeatable")
     stage = sub.add_parser("stage-carried")
     stage.add_argument("note")
     stage.add_argument("worktree")

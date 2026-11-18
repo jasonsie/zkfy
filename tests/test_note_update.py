@@ -313,6 +313,53 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(len(check["problems"]), 1)
         self.assertIn("ADR-0004", check["problems"][0])
 
+    # --- links, repoint, map line, commit split ---
+
+    def rename_theme(self, new="Brief Theme"):
+        self.put(self.tree, THEMES_NOTE, THEMES.replace("### Short Theme", f"### {new}"))
+
+    def staged_new_issues(self):
+        self.git(self.tree, "add", "-A", "--", "111.cs", "555.tools", "000.Index")
+        p = subprocess.run([sys.executable, "-B", str(SCRIPT.with_name("knowledge.py")), "--vault", str(self.tree),
+                            "hook", "--mode", "report-only"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return json.loads(p.stdout)["new_issues"]
+
+    def test_links_reports_every_inbound_link_a_heading_rename_breaks(self):
+        self.assertEqual(self.ok("links", THEMES_NOTE, str(self.tree))["broken"], [])
+        self.rename_theme()
+        result = self.ok("links", THEMES_NOTE, str(self.tree))
+        self.assertEqual(len(result["broken"]), 32)
+        self.assertEqual({(b["from"], b["heading"], b["kind"], b["new"]) for b in result["broken"]},
+                         {(MANY, "Short Theme", "heading", True)})
+        self.assertEqual(sorted({b["line"] for b in result["broken"]}), list(range(8, 40)))
+        self.assertIn("Brief Theme", result["headings"])
+        self.assertNotEqual(self.staged_new_issues(), [])
+
+    def test_repoint_rewrites_only_the_anchor_and_the_graph_validates(self):
+        self.rename_theme()
+        result = self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
+        self.assertEqual((len(result["repointed"]), result["files"], result["left"]), (32, [MANY], []))
+        text = (self.tree / MANY).read_text(encoding="utf-8")
+        self.assertEqual(text, MANY_LINKS.replace("#Short Theme", "#Brief Theme").replace("#Short%20Theme", "#Brief%20Theme"))
+        self.assertIn("[[Tools-Thesis-Themes#Brief Theme|the short one]] and [[CS-Harness]]", text)
+        self.assertEqual(self.ok("links", THEMES_NOTE, str(self.tree))["broken"], [])
+        self.assertEqual(self.staged_new_issues(), [])
+
+    def test_repoint_drops_the_anchor_of_a_removed_heading(self):
+        self.put(self.tree, THEMES_NOTE, THEMES.replace("### Short Theme\n", "").replace("word " * 150, ""))
+        self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "")
+        text = (self.tree / MANY).read_text(encoding="utf-8")
+        self.assertIn("- [[Tools-Thesis-Themes]] point 0\n", text)
+        self.assertIn("[[Tools-Thesis-Themes|the short one]]", text)
+        self.assertEqual(self.staged_new_issues(), [])
+
+    def test_repoint_refuses_a_heading_the_note_does_not_have(self):
+        self.rename_theme()
+        self.refused("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "No Such Heading",
+                     why="not a heading")
+        self.assertEqual((self.tree / MANY).read_text(encoding="utf-8"), MANY_LINKS)
+
     # --- carry ---
 
     def test_carry_copies_the_primary_copy_byte_for_byte(self):

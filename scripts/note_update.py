@@ -11,9 +11,11 @@ carried through a linked worktree and landed on main.
                                      inbound links (from notes and maps, with the heading each targets)
   carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
                                      check the two are byte-identical
-  edit-check NOTE WORKTREE           the worktree's copy against the primary copy: each section same,
-                                     changed, added or removed; frontmatter keys; Src and Link; a clip
-                                     body; the budget after. Facts only: `problems` lists rule breaks
+  edit-check NOTE WORKTREE [--sha256 S]
+                                     the worktree's copy against the edit's base (the carried copy, sha256
+                                     S, or the worktree's HEAD): each section same, changed, added or
+                                     removed; frontmatter keys; Src and Link; a clip body; the budget
+                                     after. Facts only: `problems` lists rule breaks
   stage-carried NOTE WORKTREE --sha256 S
                                      stage the primary copy, as carried (sha256 S), as the worktree's
                                      index entry, so the hand edit commits before the agent's edit
@@ -27,7 +29,7 @@ carried through a linked worktree and landed on main.
 JSON object on stdout; a stop also prints its reason on stderr (a diverged land-check, the difference
 too). The primary copy is read, never stashed or reset: land-check stages the merged blob so the
 fast-forward keeps the file, and writes the file once, only to bring a superseded copy to the merged
-blob, after checking it is still what merged. edit-check's base is the primary copy as it is now.
+blob, after checking it is still what merged.
 
 Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why) ·
 3 resolve found several notes ("candidates"; pick one by its path).
@@ -200,6 +202,11 @@ def tracked_change(root, note):
     if not blob(root, "HEAD", note):
         raise Refused(f"{note} is not on the checked-out branch")
     return status
+
+
+def index_entry(root, note):
+    """[mode, blob id, stage] of `note` in the index of the checkout at `root`, [] when untracked."""
+    return git(root, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
 
 
 def profile_of(scope, note):
@@ -402,10 +409,22 @@ def section_texts(note, data):
     return texts
 
 
+def carried_copy(root, note, sha):
+    """The primary copy, still as carried (sha256 `sha`), or a refusal."""
+    data = K.read_file(root, note)
+    if sha256(data) != sha:
+        raise Refused(f"{note} in the primary checkout changed since the carry, so the edit no longer builds on "
+                      f"it; nothing was staged. Drop the worktree and rerun", {"sha256": sha256(data)})
+    return data
+
+
 def cmd_edit_check(root, args):
     note, scope = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
-    old_data, new_data = K.read_file(root, note), K.read_file(tree, note)
+    # The edit's base: the carried copy, or the note as the worktree's HEAD has it; never the primary copy
+    # as it is now, which may hold typing done after the run began.
+    old_data = carried_copy(root, note, args.sha256) if args.sha256 else git(tree, "show", f"HEAD:{note}").stdout
+    new_data = K.read_file(tree, note)
     old, new = K.Note.parse(note, old_data, scope), K.Note.parse(note, new_data, scope)
     before, after = list(old.meta), list(new.meta)
     keys = {"added": [k for k in after if k not in before], "removed": [k for k in before if k not in after],
@@ -418,7 +437,9 @@ def cmd_edit_check(root, args):
         found.append({"heading": key[0], "status": status})
     found += [{"heading": key[0], "status": "added"} for key in new_texts if key not in old_texts]
     profile = {"before": profile_of(scope, old), "after": profile_of(scope, new)}
-    problems = [f"frontmatter keys {how}: {', '.join(keys[how])}" for how in ("added", "removed") if keys[how]]
+    # Mode is the profile: a conversion's new or changed Mode is reported once, as the profile change.
+    problems = [f"frontmatter keys {how}: {', '.join(k for k in keys[how] if k != 'Mode')}"
+                for how in ("added", "removed") if [k for k in keys[how] if k != "Mode"]]
     problems += ["frontmatter keys reordered"] if keys["reordered"] else []
     problems += [f"{k} changed; provenance stays as it is" for k in provenance]
     if profile["before"] != profile["after"]:
@@ -435,12 +456,9 @@ def cmd_edit_check(root, args):
 def cmd_stage_carried(root, args):
     note, _ = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
-    data = K.read_file(root, note)
-    if sha256(data) != args.sha256:
-        raise Refused(f"{note} in the primary checkout changed since the carry; carry it again and redo the "
-                      f"edit on top", {"sha256": sha256(data)})
+    carried_copy(root, note, args.sha256)
     oid = out(root, "hash-object", "-w", f"--path={note}", "--", str(K.safe_path(root, note)))
-    entry = git(tree, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
+    entry = index_entry(tree, note)
     git(tree, "update-index", "--cacheinfo", entry[0] if entry else "100644", oid, note)
     return {"note": note, "worktree": str(tree), "staged": oid, "sha256": args.sha256}
 
@@ -501,7 +519,7 @@ def cmd_land_check(root, args):
     entry = None
     if change and head != tip:
         # Stage the merged blob: the fast-forward then keeps the file as it is instead of refusing.
-        entry = git(root, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
+        entry = index_entry(root, note)
         mode = out(root, "ls-tree", tip, "--", note).split()[0]
         git(root, "update-index", "--cacheinfo", mode, merged, note)
     if head != tip:
@@ -541,21 +559,23 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--vault", required=True, help="the vault's primary checkout; never inferred from cwd")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve", "names", "plan", "land-check"):
-        sub.add_parser(name).add_argument("note", help="the note's exact vault-relative path")
+    sub.add_parser("resolve").add_argument("note", help="a path, a filename without its folder, or an alias")
+    for name in ("names", "plan", "land-check"):
+        sub.add_parser(name).add_argument("note", help="the note's exact vault-relative path, as resolve gives it")
     s = sub.add_parser("state")
     s.add_argument("note")
     s.add_argument("--instruction-given", action="store_true", help="the user gave an instruction (case A)")
     c = sub.add_parser("carry")
     c.add_argument("note")
     c.add_argument("worktree", help="the linked worktree the note is carried into")
-    e = sub.add_parser("edit-check")
-    e.add_argument("note")
-    e.add_argument("worktree", help="the linked worktree holding the edited copy")
-    g = sub.add_parser("stage-carried")
-    g.add_argument("note")
-    g.add_argument("worktree")
-    g.add_argument("--sha256", required=True, help="the sha256 carry reported")
+    check = sub.add_parser("edit-check")
+    check.add_argument("note")
+    check.add_argument("worktree", help="the linked worktree holding the edited copy")
+    check.add_argument("--sha256", help="carry's sha256, when the edit builds on a carried copy")
+    stage = sub.add_parser("stage-carried")
+    stage.add_argument("note")
+    stage.add_argument("worktree")
+    stage.add_argument("--sha256", required=True, help="the sha256 carry reported")
     args = parser.parse_args(argv)
     try:
         root = primary(args.vault)

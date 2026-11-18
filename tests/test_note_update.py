@@ -272,6 +272,25 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(check["provenance_changed"], ["Src"])
         self.assertEqual(len(check["problems"]), 2)
 
+    def test_edit_check_lets_a_conversion_set_mode_and_names_the_profile_change(self):
+        check = self.edited("111.cs/CS-Old-Note.md", "Categories: [Tools]\n", "Mode: atom\nCategories: [Tools]\n")
+        self.assertEqual(check["keys"]["added"], ["Mode"])
+        self.assertEqual(check["problems"], ["profile changed from legacy to atom"])
+
+    def test_edit_check_reads_against_the_worktrees_base_not_later_typing(self):
+        self.put(self.vault, NOTE, page("thesis", "Typed in Obsidian during the run."))  # clean when the run began
+        check = self.edited(NOTE, "### Links\n", "### Links\n- [[CS-Harness]]\n")
+        self.assertEqual([s["heading"] for s in check["sections"] if s["status"] != "same"], ["Links"])
+
+    def test_edit_check_with_a_carry_reads_against_the_carried_copy(self):
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        sha = self.ok("carry", NOTE, str(self.tree))["sha256"]
+        self.put(self.tree, NOTE, page("thesis", "My edit.").replace("### Links\n", "### Links\n- [[CS-Harness]]\n"))
+        check = self.ok("edit-check", NOTE, str(self.tree), "--sha256", sha)
+        self.assertEqual([s["heading"] for s in check["sections"] if s["status"] != "same"], ["Links"])
+        self.put(self.vault, NOTE, page("thesis", "My edit, typed on."))
+        self.refused("edit-check", NOTE, str(self.tree), "--sha256", sha, why="changed since the carry")
+
     def test_edit_check_flags_a_clip_body_change_but_not_its_links(self):
         clip = "555.tools/Tools-Clip-Page.md"
         self.assertEqual(self.edited(clip, "### Links\n", "### Links\n- [[CS-Harness]]\n")["problems"], [])

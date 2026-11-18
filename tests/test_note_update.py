@@ -376,6 +376,39 @@ class NoteUpdateTest(unittest.TestCase):
                 self.refused("map-line", NOTE, str(self.tree), *args, why=why)
         self.assertEqual(self.git(self.tree, "status", "--porcelain"), "")
 
+    def test_commits_keeps_a_small_change_in_one_commit(self):
+        self.rename_theme()
+        self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
+        result = self.ok("commits", THEMES_NOTE, str(self.tree))
+        self.assertEqual((result["lines"]["note"], result["lines"]["links"], result["split"]), (2, 64, False))
+        self.assertEqual(result["files"], {"links": [MANY], "map": []})
+
+    def numstat(self, *args):
+        return sum(int(a) + int(d) for a, d, _ in (row.split("\t") for row in
+                                                   self.git(self.tree, "diff", "--numstat", *args).splitlines()))
+
+    def test_commits_splits_renames_and_links_from_the_rest_over_300_lines(self):
+        body = "".join(f"字 line {i}\n" for i in range(260))
+        self.put(self.tree, THEMES_NOTE, THEMES.replace("### Short Theme", "### Brief Theme")
+                 .replace("### Links\n", body + "### Links\n"))
+        self.ok("repoint", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
+        self.assertTrue(self.ok("commits", THEMES_NOTE, str(self.tree))["split"])
+        staged = self.ok("stage-renames", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme")
+        self.assertEqual(staged["staged"], [THEMES_NOTE, MANY])
+        self.assertEqual(self.git(self.tree, "show", f":{THEMES_NOTE}"),
+                         THEMES.replace("### Short Theme", "### Brief Theme").rstrip("\n"))
+        first = self.numstat("--cached")
+        self.git(self.tree, "commit", "-qm", "docs(links): repoint 32 links to Tools-Thesis-Themes's renamed headings")
+        self.assertEqual(self.staged_new_issues(), [])  # stages the rest
+        second = self.numstat("--cached")
+        self.assertTrue(first < 300 and second < 300 and first + second > 300, (first, second))
+
+    def test_stage_renames_refuses_while_a_link_stays_broken(self):
+        self.rename_theme()
+        self.refused("stage-renames", THEMES_NOTE, str(self.tree), "--rename", "Short Theme", "Brief Theme",
+                     why="still break")
+        self.assertEqual(self.git(self.tree, "diff", "--cached", "--name-only"), "")
+
     # --- carry ---
 
     def test_carry_copies_the_primary_copy_byte_for_byte(self):

@@ -24,6 +24,12 @@ carried through a linked worktree and landed on main.
                                      empty NEW links the note itself); no link is added or retargeted
   map-line NOTE WORKTREE --map M --line L --text T
                                      replace line L of map M, which links NOTE, with T: one line, no new link
+  commits NOTE WORKTREE [--sha256 S] the edit's changed lines (note, links, map) and whether they pass
+                                     the 300-line commit limit together
+  stage-renames NOTE WORKTREE --rename OLD NEW ...
+                                     over the limit: stage the note's base with only its headings renamed,
+                                     plus the repointed links, as the first commit; the ratchet's check
+                                     must pass on that snapshot
   stage-carried NOTE WORKTREE --sha256 S
                                      stage the primary copy, as carried (sha256 S), as the worktree's
                                      index entry, so the hand edit commits before the agent's edit
@@ -73,6 +79,7 @@ def _load_knowledge():
 
 K = sys.modules.get("knowledge") or _load_knowledge()
 
+LIMIT = 300  # the small-commits hook's limit on one commit's changed lines
 WORK_NAME = re.compile(r"[a-z][a-z0-9]*/[a-z0-9][a-z0-9-]*")  # ai-dotfiles worktree-guard's <type>/<slug>
 
 
@@ -599,6 +606,64 @@ def cmd_map_line(root, args):
     return {"note": note, "map": path, "line": args.line, "old": old.rstrip("\r\n"), "new": args.text}
 
 
+def changed_lines(old, new):
+    """Lines added plus lines deleted between two versions, as a diff counts them."""
+    a, b = old.decode("utf-8", "replace").splitlines(), new.decode("utf-8", "replace").splitlines()
+    return sum((i2 - i1) + (j2 - j1) for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False)
+               .get_opcodes() if op != "equal")
+
+
+def worktree_changes(tree, note, scope):
+    """{path: changed lines} of the worktree's tracked changes other than `note` and the catalogs."""
+    found = {}
+    for row in git(tree, "diff", "--numstat", "-z", "--no-renames", "HEAD").stdout.split(b"\0"):
+        if row:
+            added, deleted, path = row.decode("utf-8").split("\t", 2)
+            if path != note and not path.startswith(".claude/"):
+                found[path] = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
+    return found
+
+
+def cmd_commits(root, args):
+    note, scope = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    others = worktree_changes(tree, note, scope)
+    maps = sorted(p for p in others if scope.is_map(p))
+    links = sorted(p for p in others if p not in maps)
+    lines = {"note": changed_lines(edit_base(root, tree, note, args.sha256), K.read_file(tree, note)),
+             "links": sum(others[p] for p in links), "map": sum(others[p] for p in maps)}
+    lines["total"] = sum(lines.values())
+    return {"note": note, "lines": lines, "limit": LIMIT, "split": lines["total"] > LIMIT,
+            "files": {"links": links, "map": maps}}
+
+
+def cmd_stage_renames(root, args):
+    note, scope = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    head = git(tree, "show", f"HEAD:{note}").stdout
+    renames = {K.anchor_slug(old): new for old, new in args.rename if new}
+    raw = head.decode("utf-8").splitlines(keepends=True)
+    renamed = []
+    for number, heading in K.Note.parse(note, head, scope).headings:
+        new = renames.get(K.anchor_slug(heading))
+        if new:
+            line = raw[number - 1]
+            raw[number - 1] = re.match(r"#{1,6}\s+", line)[0] + new + line[len(line.rstrip("\r\n")):]
+            renamed.append({"old": heading, "new": new})
+    oid = git(tree, "hash-object", "-w", f"--path={note}", "--stdin", data="".join(raw).encode("utf-8")).stdout
+    entry = index_entry(tree, note)
+    links = sorted(p for p in worktree_changes(tree, note, scope) if not scope.is_map(p))
+    git(tree, "update-index", "--cacheinfo", entry[0] if entry else "100644", oid.decode().strip(), note)
+    if links:
+        git(tree, "add", "--", *links)
+    report, _ = K.run_hook(tree, "report-only")  # the ratchet's own check, without staging catalogs
+    if report["new_issues"]:
+        git(tree, "restore", "--staged", "--", note, *links)
+        raise Refused(f"the renames and link fixes alone still break {len(report['new_issues'])} link(s); "
+                      f"repoint them first. Nothing stays staged", {"new_issues": report["new_issues"]})
+    return {"note": note, "staged": [note, *links], "renamed": renamed}
+
+
 def base_branch(root):
     """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
     p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
@@ -680,7 +745,8 @@ def cmd_land_check(root, args):
 
 COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
             "carry": cmd_carry, "edit-check": cmd_edit_check, "links": cmd_links, "repoint": cmd_repoint,
-            "map-line": cmd_map_line, "stage-carried": cmd_stage_carried, "land-check": cmd_land_check}
+            "map-line": cmd_map_line, "commits": cmd_commits, "stage-renames": cmd_stage_renames,
+            "stage-carried": cmd_stage_carried, "land-check": cmd_land_check}
 
 
 def main(argv=None):
@@ -703,7 +769,11 @@ def main(argv=None):
     command = sub.add_parser("links")
     command.add_argument("note")
     command.add_argument("worktree")
-    for name in ("repoint",):
+    command = sub.add_parser("commits")
+    command.add_argument("note")
+    command.add_argument("worktree")
+    command.add_argument("--sha256", help="carry's sha256 in case A on a dirty note: the user's commit comes first")
+    for name in ("repoint", "stage-renames"):
         command = sub.add_parser(name)
         command.add_argument("note")
         command.add_argument("worktree")

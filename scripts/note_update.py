@@ -107,6 +107,19 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def write_atomic(path, data, mode_from=None):
+    """Replace the file at `path` with `data` in one rename, keeping its permissions."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".note-update-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+        shutil.copymode(mode_from or path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
 # --- the vault and the note -----------------------------------------------------------------------
 
 def primary(value):
@@ -372,15 +385,7 @@ def cmd_carry(root, args):
     else:
         if not target.is_file() or file_blob(tree, note) != tree_head:
             raise Refused(f"the worktree's copy of {note} has edits of its own; carry never overwrites them")
-        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".note-update-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(data)
-            shutil.copymode(source, tmp)
-            os.replace(tmp, target)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
+        write_atomic(target, data, mode_from=source)
         carried = True
     copy = target.read_bytes()
     result = {"note": note, "worktree": str(tree), "carried": carried, "identical": copy == data,
@@ -418,12 +423,17 @@ def carried_copy(root, note, sha):
     return data
 
 
+def edit_base(root, tree, note, sha):
+    """The edit's base: the carried copy (checked by its sha256), or the note at the worktree's HEAD."""
+    return carried_copy(root, note, sha) if sha else git(tree, "show", f"HEAD:{note}").stdout
+
+
 def cmd_edit_check(root, args):
     note, scope = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
     # The edit's base: the carried copy, or the note as the worktree's HEAD has it; never the primary copy
     # as it is now, which may hold typing done after the run began.
-    old_data = carried_copy(root, note, args.sha256) if args.sha256 else git(tree, "show", f"HEAD:{note}").stdout
+    old_data = edit_base(root, tree, note, args.sha256)
     new_data = K.read_file(tree, note)
     old, new = K.Note.parse(note, old_data, scope), K.Note.parse(note, new_data, scope)
     before, after = list(old.meta), list(new.meta)
@@ -535,15 +545,7 @@ def cmd_land_check(root, args):
         if file_blob(root, note) != copy:
             raise Refused(f"{note} changed during the land check; {base} is at the merge and your copy is "
                           f"left as it is", {**result, "fast_forwarded": head != tip})
-        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".note-update-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(git(root, "cat-file", "--filters", f"{tip}:{note}").stdout)
-            shutil.copymode(path, tmp)
-            os.replace(tmp, path)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
+        write_atomic(path, git(root, "cat-file", "--filters", f"{tip}:{note}").stdout)
     left = status_of(root, note)
     return {**result, "fast_forwarded": head != tip, "restored": bool(change) and not left, "status": left}
 

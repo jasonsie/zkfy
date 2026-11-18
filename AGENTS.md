@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-zkfy is a plugin for Claude Code, Codex, Pi and Antigravity that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Five user-invoked skills drive everything: `source-to-zk` (ingest), `clip-to-zk` (file a source verbatim), `query-to-note` (synthesize from existing notes), `vault-lint` (semantic health check), `vault-reorg` (reorganize); Claude Code shows them as `/zkfy:<name>`. Agent definitions live in `agents/`, skills in `skills/` — read those files for specifics rather than relying on this document. The rules that keep the plugin loading in all four CLIs are ai-dotfiles' `portable-plugin` skill; `tests/test_portable.py` checks them, and `agy plugin validate --strict` warns by design about `.mcp.json`, `hooks/hooks.json` and this file, which the other CLIs read.
+zkfy is a plugin for Claude Code, Codex, Pi and Antigravity that turns URLs, videos, and raw text into Zettelkasten literature notes for an Obsidian vault. Six user-invoked skills drive everything: `source-to-zk` (ingest), `clip-to-zk` (file a source verbatim), `query-to-note` (synthesize from existing notes), `vault-lint` (semantic health check), `vault-reorg` (reorganize), `note-update` (land one note's update on main); Claude Code shows them as `/zkfy:<name>`. Agent definitions live in `agents/`, skills in `skills/` — read those files for specifics rather than relying on this document. The rules that keep the plugin loading in all four CLIs are ai-dotfiles' `portable-plugin` skill; `tests/test_portable.py` checks them, and `agy plugin validate --strict` warns by design about `.mcp.json`, `hooks/hooks.json` and this file, which the other CLIs read.
 
 ## Scope clarification
 
@@ -28,7 +28,7 @@ The 3-stage architecture itself is unchanged from ADR-0001 — only the modeler'
 
 ## Non-obvious dependencies
 
-Nothing outside this repo is required: the agents carry their own extraction and note-structure rules, so the plugin also runs where only the repository exists, such as a Claude Code cloud session (`cloud/`, `docs/cloud-session.md`). Two files are read as overrides when they exist, never required:
+Nothing outside this repo is required: the agents carry their own extraction and note-structure rules, so the plugin also runs where only the repository exists, such as a Claude Code cloud session (`cloud/`, `docs/cloud-session.md`). The one exception is `note-update`: its git flow runs through ai-dotfiles' `worktree`, `ship` and `approve` commands and `gh`, and `scripts/note_update.py` reads worktree-guard's claim and sidecar records to find a stopped run's worktree and owner. Two files are read as overrides when they exist, never required:
 
 - `~/.claude/prompts/crawler.prompt.md` — markdown extraction rules (markdown-file-agent)
 - `~/.claude/prompts/obsidian-note.prompt.md` — note structure rules (obsidian-formatter-agent, after the vault's own `docs/workflows/vault-authoring.md` when the vault has one)

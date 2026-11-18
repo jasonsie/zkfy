@@ -290,6 +290,7 @@ class Note:
     errors: list
     domain: str
     line_count: int
+    sites: list  # (line number, target, the link's text) for each link in prose, in `links` order
 
     @classmethod
     def parse(cls, name, data, scope):
@@ -316,14 +317,16 @@ class Note:
         else:
             errors.append(("metadata", "missing frontmatter"))
         lines = [(i + 1, line) for i, line in enumerate(all_lines) if i >= start]
-        headings, links = [], []
+        headings, sites = [], []
         for n, line in prose_lines(lines):
             h = HEADING.match(line)
             if h:
                 headings.append((n, h[1]))
-            links.extend(m[1].split("|", 1)[0].strip() for m in WIKI.finditer(line))
-            links.extend(unquote(m[1]) for m in MDLINK.finditer(line) if not re.match(r"^[\w+.-]+:", m[1]))
-        return cls(name, digest(data), meta, lines, headings, links, errors, scope.domain(name), len(all_lines))
+            sites.extend((n, m[1].split("|", 1)[0].strip(), m[0]) for m in WIKI.finditer(line))
+            sites.extend((n, unquote(m[1]), m[0]) for m in MDLINK.finditer(line) if not re.match(r"^[\w+.-]+:", m[1]))
+        links = [target for _, target, _ in sites]
+        return cls(name, digest(data), meta, lines, headings, links, errors, scope.domain(name), len(all_lines),
+                   sites)
 
     def summary(self):
         for _, text in prose_lines(self.lines):
@@ -335,6 +338,11 @@ class Note:
         value = self.meta.get(field, [])
         values = value if isinstance(value, list) else [value]
         return [visible(str(v)) for v in values if v and not outside_ref(str(v))]
+
+
+def anchor_slug(text):
+    """A heading as a link anchor matches it: case, punctuation and spacing do not count."""
+    return re.sub(r"[^\w\u4e00-\u9fff]+", "-", text.casefold()).strip("-")
 
 
 class Corpus:
@@ -365,12 +373,10 @@ class Corpus:
         p = next(iter(matches))
         if anchor:
             note = self.notes[p]
-            def slug(s):
-                return re.sub(r"[^\w\u4e00-\u9fff]+", "-", s.casefold()).strip("-")
             if anchor.startswith("^"):
                 exists = any(re.search(r"\^" + re.escape(anchor[1:]) + r"\s*$", s) for _, s in note.lines)
             else:
-                exists = any(slug(h) == slug(anchor) for _, h in note.headings)
+                exists = any(anchor_slug(h) == anchor_slug(anchor) for _, h in note.headings)
             if not exists:
                 return "anchor", [p]
         return "ok", [p]
@@ -893,6 +899,8 @@ def main(argv=None):
                 differences = write_outputs(snap, corpus.outputs(), args.check)
                 report = {"differences": differences, "check": args.check, "notes": len(corpus.notes)}
                 code = args.check and bool(differences)
+                if code:  # ship's Verify step reports a failed check by its last stderr line
+                    print(f"knowledge: stale catalog: {', '.join(differences)}; run build", file=sys.stderr)
             elif args.command == "reorg":
                 sys.modules.setdefault("knowledge", sys.modules[__name__])
                 import reorg

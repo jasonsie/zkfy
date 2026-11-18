@@ -74,6 +74,7 @@ All eight declare `model: inherit`; skills delegate by having a general subagent
 | `vault-lint/` | 12 semantic health checks: contradictions, staleness, orphans, missing pages, weak links, concept gaps, cross-ref gaps (1-7), plus Concept-First / Hybrid Mode / clip-aware conformance (8-12); methods in `references/checks.md`. Fixes for 5-7 and 10 proposed, applied on user approval |
 | `vault-reorg/` | Reorganization passes: survey, dialogs, mapping, weave with a unit ledger, apply |
 | `clip-to-zk/` | Files a source verbatim as a `Mode: clip` note (`scripts/clip_note.py` does the exact steps); not part of the 3-stage pipeline |
+| `note-update/` | Lands one note's update on main through a worktree, the plan and diff gates, ship and approve (`scripts/note_update.py` does the mechanical steps); not part of the 3-stage pipeline |
 | `terminal-colors/` | Standardized ANSI color codes for agent output |
 | `x-learn-study-sop/` | 4-phase study SOP: checkpoint, RAG extraction, parallel impl, commit |
 
@@ -86,6 +87,7 @@ All eight declare `model: inherit`; skills delegate by having a general subagent
 | `vault-lint` | Directory path [--fix] [--checks] | semantic checks --> [proposed fixes 5,6,7,10, applied on approval] |
 | `vault-reorg` | [scope] [--job] | survey --> dialogs --> mapping --> weave or moves --> apply --> stage --> confirm commit |
 | `notion-to-zk` | Notion page URL | Notion MCP fetch --> Phase 1 --> Phase 2 --> Phase 2.5 --> Phase 3 |
+| `note-update` | Note path, filename or alias [instruction] | resolve --> state (case, resume) --> [fixes] --> plan gate --> worktree --> carry or edit --> links + map line --> diff gate --> commit --> ship --> approve --> land check |
 | `clip-to-zk` | URL, `raw/` clip, file, text, or video | dedupe --> capture --> Discover --> adopt --> `clip_note.py` --> verify --> delete raw copy --> cross-pollinate (proposals) --> lint + build. See `docs/ADR/0004-clip-mode-verbatim-notes.md` |
 
 ## Hooks
@@ -140,7 +142,7 @@ zkfy/
     setup.sh                     # A Claude Code cloud environment's setup script: plugins, clipper CLI, Chromium
     session-start.sh             # The vault's SessionStart hook in the cloud: report, binding, PATH
   agents/                        # 8 agents, model: inherit
-  skills/                        # 11 skills; the five entry points among them
+  skills/                        # 12 skills; the six entry points among them
   hooks/
     hooks.json                   # PreToolUse + PostToolUse hooks (Claude Code, Codex)
     validate-zk-structure.sh     # ZK structure validation

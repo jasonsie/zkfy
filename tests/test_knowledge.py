@@ -161,6 +161,21 @@ class VaultTest(unittest.TestCase):
             subprocess.run(["git", "clone", "-q", "--depth", "1", self.root.as_uri(), clone], check=True)
             self.assertEqual(a, k.Corpus(k.Snapshot(Path(clone))).outputs())
 
+    def test_build_check_names_the_stale_catalog_on_its_last_stderr_line(self):
+        # `ai-dotfiles ship` reports a failed Verify command by its last stderr line.
+        self.initialize_catalog()
+        self.put("333.ai/AI-Harness.md", note("Edited without a rebuild."))
+        tool = Path(__file__).parents[1] / "scripts/knowledge.py"
+        p = subprocess.run([sys.executable, "-B", str(tool), "--vault", str(self.root), "build", "--check"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(p.returncode, 1)
+        stale = json.loads(p.stdout)["differences"]
+        self.assertIn(k.MANIFEST, stale)
+        last = p.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("knowledge: stale catalog: "), last)
+        for name in stale:
+            self.assertIn(name, last)
+
     def initialize_catalog(self):
         c = self.corpus()
         k.write_outputs(c.snapshot, c.outputs())

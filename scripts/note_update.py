@@ -80,7 +80,7 @@ def _load_knowledge():
 
 K = sys.modules.get("knowledge") or _load_knowledge()
 
-LIMIT = 300  # the small-commits hook's limit on one commit's changed lines
+COMMIT_LINE_LIMIT = 300  # the small-commits hook's limit on one commit's changed lines
 WORK_NAME = re.compile(r"[a-z][a-z0-9]*/[a-z0-9][a-z0-9-]*")  # ai-dotfiles worktree-guard's <type>/<slug>
 
 
@@ -517,24 +517,24 @@ def cmd_links(root, args):
     return {"note": note, "broken": broken, "headings": [h for _, h in now.notes[note].headings]}
 
 
-def retarget(text, renames):
-    """The link `text` with its heading anchor renamed by `renames` ({anchor slug: new heading, '' for
-    none}), or None when no rename applies. Only the anchor changes: an alias or md-link label stays."""
-    if text.endswith("]]"):
-        start = text.index("[[") + 2
-        target, bar, alias = text[start:-2].partition("|")
-        escape = "\\" if target.endswith("\\") else ""  # a table cell's escaped pipe
-        base, hashmark, anchor = target[:len(target) - len(escape)].partition("#")
-        new = renames.get(K.anchor_slug(anchor)) if hashmark else None
-        if new is None or not (base or new):  # the note's own `[[#Old]]` needs a heading to point at
-            return None
-        return text[:start] + base + (f"#{new}" if new else "") + escape + bar + alias + "]]"
-    start = text.rindex("(") + 1
-    base, hashmark, anchor = text[start:-1].partition("#")
-    new = renames.get(K.anchor_slug(unquote(anchor))) if hashmark else None
-    if new is None or not (base or new):
+def anchor_renames(pairs):
+    """{anchor slug of OLD: NEW} from --rename pairs; an empty NEW drops the anchor."""
+    return {K.anchor_slug(old): new for old, new in pairs}
+
+
+def rename_anchor(text, renames):
+    """The link `text` with its heading anchor renamed by `renames` (anchor_renames), or None when no
+    rename applies. Only the anchor changes: an alias or md-link label stays, and so does the target."""
+    wiki = text.endswith("]]")
+    start = text.index("[[") + 2 if wiki else text.rindex("(") + 1
+    end = len(text) - (2 if wiki else 1)
+    target, bar, alias = text[start:end].partition("|") if wiki else (text[start:end], "", "")
+    escape = "\\" if target.endswith("\\") else ""  # a table cell's escaped pipe
+    base, hashmark, anchor = target[:len(target) - len(escape)].partition("#")
+    new = renames.get(K.anchor_slug(anchor if wiki else unquote(anchor))) if hashmark else None
+    if new is None or not (base or new):  # the note's own `[[#Old]]` needs a heading to point at
         return None
-    return text[:start] + base + (f"#{quote(new)}" if new else "") + ")"
+    return text[:start] + base + (f"#{new if wiki else quote(new)}" if new else "") + escape + bar + alias + text[end:]
 
 
 def cmd_repoint(root, args):
@@ -545,10 +545,10 @@ def cmd_repoint(root, args):
     for _, new in args.rename:
         if new and K.anchor_slug(new) not in headings:
             raise Refused(f"{new!r} is not a heading of {note} in the worktree")
-    renames = {K.anchor_slug(old): new for old, new in args.rename}
+    renames = anchor_renames(args.rename)
     edits, left = defaultdict(list), []
     for path, (line, link, text), status in inbound_sites(corpus, note, own=True):
-        new_text = retarget(text, renames) if status == "anchor" else None
+        new_text = rename_anchor(text, renames) if status == "anchor" else None
         if new_text is not None:
             edits[path].append((line, text, new_text))
         elif status == "anchor":
@@ -639,7 +639,8 @@ def cmd_commits(root, args):
     lines = {"note": changed_lines(edit_base(root, tree, note, args.sha256), K.read_file(tree, note)),
              "links": sum(others[p] for p in links), "map": sum(others[p] for p in maps)}
     lines["total"] = sum(lines.values())
-    return {"note": note, "lines": lines, "limit": LIMIT, "split": lines["total"] > LIMIT,
+    return {"note": note, "lines": lines, "limit": COMMIT_LINE_LIMIT,
+            "split": lines["total"] > COMMIT_LINE_LIMIT,
             "files": {"links": links, "map": maps}}
 
 
@@ -647,17 +648,17 @@ def cmd_stage_renames(root, args):
     note, scope = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
     corpus = K.Corpus(K.Snapshot(tree))  # resolves HEAD's link targets against the edited note
-    renames = {K.anchor_slug(old): new for old, new in args.rename}
+    renames = anchor_renames(args.rename)
     staged, renamed = [], []
     for path in [note, *sorted(worktree_changes(tree, note, scope))]:
         head = git(tree, "show", f"HEAD:{path}").stdout
         parsed = K.Note.parse(path, head, scope)
         raw = head.decode("utf-8").splitlines(keepends=True)
-        # The first commit's copy: HEAD's, with each link the edit broke retargeted as repoint did; an
+        # The first commit's copy: HEAD's, with each link the edit broke repointed as repoint did; an
         # approved map line and the rest of the edit wait for the second commit.
         for number, link, text in parsed.sites:
             status, hits = corpus.resolve(link, path)
-            new_text = retarget(text, renames) if hits == [note] and status == "anchor" else None
+            new_text = rename_anchor(text, renames) if hits == [note] and status == "anchor" else None
             if new_text is not None:
                 raw[number - 1] = raw[number - 1].replace(text, new_text, 1)
         if path == note:  # a renamed heading takes its new name; a removed one stays until the second commit

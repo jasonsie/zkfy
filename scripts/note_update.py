@@ -2,7 +2,8 @@
 """The mechanical steps of the note-update skill: one eligible note, edited in the primary checkout,
 carried through a linked worktree and landed on main.
 
-  resolve NOTE                       the note's vault-relative path (exact path only) and its profile
+  resolve NOTE                       the eligible note NOTE names (an exact path, else a basename, else an
+                                     alias) and its profile; several matches list the candidates
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts
   names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
@@ -17,8 +18,9 @@ JSON object on stdout; a stop also prints its reason on stderr (a diverged land-
 too). The primary copy is only ever read: land-check stages an identical copy so the fast-forward
 keeps it, and never stashes, resets or writes it.
 
-Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why).
-Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, note profile).
+Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why) ·
+3 resolve found several notes ("candidates"; pick one by its path).
+Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligible notes, search).
 """
 from __future__ import annotations
 
@@ -54,9 +56,9 @@ WORK_NAME = re.compile(r"[a-z][a-z0-9]*/[a-z0-9][a-z0-9-]*")  # ai-dotfiles work
 class Refused(Exception):
     """A step's rule said no; nothing was changed. `data` joins the JSON beside the reason."""
 
-    def __init__(self, reason, data=None):
+    def __init__(self, reason, data=None, code=2):
         super().__init__(reason)
-        self.reason, self.data = reason, data or {}
+        self.reason, self.data, self.code = reason, data or {}, code
 
 
 class GitError(Exception):
@@ -104,25 +106,62 @@ def primary(value):
     return root
 
 
-def note_of(root, value):
-    """The vault-relative path of the eligible note `value` names: an exact vault-relative path, or an
-    absolute path inside the vault. Anything else is refused."""
+def vault_relative(root, value):
+    """`value` as a vault-relative POSIX path: given relative, or absolute inside the vault."""
     raw = os.path.expanduser(value)
     if os.path.isabs(raw):
         p = Path(os.path.abspath(raw))
         try:
-            value = (p.parent.resolve() / p.name).relative_to(root).as_posix()
+            return (p.parent.resolve() / p.name).relative_to(root).as_posix()
         except ValueError:
             raise Refused(f"{value} is outside the vault") from None
-    scope = K.Snapshot(root).scope
     try:
-        name = K.relative(value)
-        if not scope.eligible(name):
-            raise Refused(f"{name} is not an eligible note: the vault's scope policy leaves it out")
-        path = K.safe_path(root, name)
+        return K.relative(value)
     except K.KnowledgeError as e:
         raise Refused(f"{value}: {e}") from None
-    if not path.is_file():
+
+
+def refusal(scope, name):
+    """Why note-update never edits the vault-relative path `name`; None for an eligible note path."""
+    parts = PurePosixPath(name).parts
+    top = parts[0].casefold() if parts else ""
+    if parts[:2] == (".claude", "worktrees"):
+        rest = "/".join(parts[3:])
+        return (f"{name} is a copy under the agents' worktree folder, not the vault's note"
+                + (f"; name the vault's own, {rest}" if rest else ""))
+    if K.owned_path(name):
+        return f"{name} is a generated catalog; vault-knowledge build writes it"
+    if top == ".obsidian":
+        return f"{name} is Obsidian's settings, not a note"
+    if top == "raw":
+        return f"{name} is under raw/, which holds sources, not notes"
+    if top == "docs":
+        return f"{name} is under docs/, the vault's own documentation"
+    if not scope.eligible(name):
+        return f"{name} is outside the vault's scope policy"
+    return None
+
+
+def note_path(root, scope, value):
+    """The eligible note path `value` spells, `.md` optional, or a refusal with its reason."""
+    name = vault_relative(root, value)
+    why = refusal(scope, name)
+    if why and not name.endswith(".md") and not refusal(scope, name + ".md"):
+        name, why = name + ".md", None
+    if why:
+        raise Refused(why)
+    try:
+        K.safe_path(root, name)
+    except K.KnowledgeError as e:
+        raise Refused(f"{name}: {e}") from None
+    return name
+
+
+def note_of(root, value):
+    """The eligible note at the exact path `value` (vault-relative, or absolute inside the vault)."""
+    scope = K.Snapshot(root).scope
+    name = note_path(root, scope, value)
+    if not K.safe_path(root, name).is_file():
         raise Refused(f"no note at {name}; note-update never creates one")
     return name, scope
 
@@ -152,14 +191,43 @@ def tracked_change(root, note):
 
 # --- subcommands -----------------------------------------------------------------------------------
 
+def name_key(text):
+    """A name as the user may type it: case, spaces, underscores and hyphens do not count."""
+    return re.sub(r"[\s_-]+", "-", text.strip().casefold())
+
+
 def cmd_resolve(root, args):
-    note, scope = note_of(root, args.note)
-    if scope.is_map(note):
-        profile = "map"
-    else:
-        meta = K.Note.parse(note, K.read_file(root, note), scope).meta
-        profile = str(meta.get("Mode", "legacy"))
-    return {"note": note, "profile": profile}
+    corpus = K.Corpus(K.Snapshot(root))  # the eligible notes, read once; nothing outside scope is seen
+    value = args.note.strip()
+
+    def match(path, how):
+        profile = "map" if corpus.scope.is_map(path) else str(corpus.notes[path].meta.get("Mode", "legacy"))
+        return {"note": path, "profile": profile, "matched_by": how}
+
+    def no_match():
+        hits = K.search(corpus, value, 5)
+        return Refused(f"no eligible note matches {value!r}; note-update never creates one",
+                       {"suggestions": [{k: v for k, v in match(h["path"], "search").items() if k != "matched_by"}
+                                        for h in hits]})
+
+    if re.search(r"[/\\]", value) or value.startswith((".", "~")):
+        name = note_path(root, corpus.scope, value)
+        if name in corpus.notes:
+            return match(name, "path")
+        raise no_match()
+    stem = value[:-3] if value.casefold().endswith(".md") else value
+    if stem + ".md" in corpus.notes:  # a note at the vault's root (the policy's include_files)
+        return match(stem + ".md", "path")
+    key = name_key(stem)
+    for how, names in (("basename", lambda p, n: [PurePosixPath(p).stem]),
+                       ("alias", lambda p, n: n.values("Aliases"))):
+        hits = sorted(p for p, n in corpus.notes.items() if any(name_key(x) == key for x in names(p, n)))
+        if len(hits) == 1:
+            return match(hits[0], how)
+        if hits:
+            raise Refused(f"{len(hits)} notes match {value!r} by {how}; pick one by its path",
+                          {"candidates": [match(p, how) for p in hits]}, code=3)
+    raise no_match()
 
 
 def cmd_state(root, args):
@@ -320,7 +388,7 @@ def main(argv=None):
         root = primary(args.vault)
         code, result = 0, COMMANDS[args.command](root, args)
     except Refused as e:
-        code, result = 2, {**e.data, "error": e.reason}
+        code, result = e.code, {**e.data, "error": e.reason}
     except (K.KnowledgeError, GitError, OSError) as e:
         code, result = 1, {"error": str(e)}
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

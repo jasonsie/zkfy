@@ -2,7 +2,7 @@
 name: note-update
 description: "Land an update to one vault note on main: your own Obsidian edit, carried through a worktree, a diff gate, commit, ship and approve, with your copy never overwritten."
 disable-model-invocation: true
-argument-hint: "<note path> [instruction] [--vault <root>]"
+argument-hint: "<note: path, filename or alias> [instruction] [--vault <root>]"
 ---
 
 # Note update
@@ -39,8 +39,16 @@ the current folder. Done when `<V>/docs/knowledge/scope.json` exists.
 
 ### 2. Resolve
 
-`NU resolve "<note>"`, with the note's exact path, vault-relative or absolute inside `<V>`. `<N>` is
-the `note` it returns. Report the `profile`.
+`NU resolve "<note>"`, with the user's words for the note. That can be a path (vault-relative, or
+absolute inside `<V>`), a filename without its folder, or an alias. `<N>` is the `note` it returns.
+Report its `profile` and `matched_by`.
+
+- **Exit 3, several notes match:** ask which one. In a dialog, the `candidates` are the options,
+  each with its path and profile; a dialog holds four, so name any others in the question. Without a
+  dialog, print a numbered list and wait for a number. `<N>` is the one picked. An answer naming none
+  of them stops the run.
+- **Exit 2:** stop with the `error`. When it carries `suggestions`, list their paths so the user can
+  rerun with one. Nothing is created.
 
 ### 3. State
 

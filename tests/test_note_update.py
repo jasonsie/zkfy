@@ -15,20 +15,27 @@ MAP = "000.Index/CS Map.md"
 SCOPE = {"version": 1, "domains": {"cs": "111.cs", "tools": "555.tools"}, "maps": ["000.Index"]}
 
 
-def page(mode=None, body="Body."):
+def page(mode=None, body="Body.", aliases="[]"):
     mode_line = f"Mode: {mode}\n" if mode else ""
-    return f"---\nDate: 2026-11-01\nType: literature\n{mode_line}Categories: [Tools]\nAliases: []\n---\n### Abstract\n{body}\n### Links\n"
+    return (f"---\nDate: 2026-11-01\nType: literature\n{mode_line}Categories: [Tools]\nAliases: {aliases}\n---\n"
+            f"### Abstract\n{body}\n### Links\n")
 
 
 FILES = {
     "docs/knowledge/scope.json": json.dumps(SCOPE),
-    NOTE: page("thesis", "信任金字塔 trust pyramid."),
-    "111.cs/CS-Harness.md": page("atom"),
+    NOTE: page("thesis", "信任金字塔 trust pyramid.", aliases="[Agent Trust Pyramid, 代理信任金字塔]"),
+    "111.cs/CS-Harness.md": page("atom", aliases="[Harness]"),
+    "555.tools/Tools-Harness-Setup.md": page(aliases="[harness]"),
     "111.cs/CS-Old-Note.md": page(),
+    "111.cs/Shared-Name.md": page(),
+    "555.tools/Shared-Name.md": page(),
+    "555.tools/Tools-Clip-Page.md": page("clip", "Verbatim."),
     MAP: "---\nType: structure\n---\n[[Tools-Agent-Trust-Pyramid]]\n",
     "111.cs/筆記.md": page("atom"),
     "raw/Source.md": "a source\n",
     "docs/workflows/vault-authoring.md": "rules\n",
+    "template/Template-Note.md": page(),
+    "notes/Loose-Note.md": page(),
     ".obsidian/workspace.json": "{}\n",
     ".claude/index.md": "catalog\n",
 }
@@ -110,21 +117,60 @@ class NoteUpdateTest(unittest.TestCase):
 
     # --- resolve ---
 
-    def test_resolve_takes_an_exact_path_and_names_the_profile(self):
-        self.assertEqual(self.ok("resolve", NOTE), {"note": NOTE, "profile": "thesis"})
-        self.assertEqual(self.ok("resolve", str(self.vault / NOTE))["note"], NOTE)
-        self.assertEqual(self.ok("resolve", "111.cs/CS-Harness.md")["profile"], "atom")
-        self.assertEqual(self.ok("resolve", "111.cs/CS-Old-Note.md")["profile"], "legacy")
-        self.assertEqual(self.ok("resolve", MAP)["profile"], "map")
-        self.assertEqual(self.ok("resolve", "111.cs/筆記.md")["note"], "111.cs/筆記.md")
+    def resolved(self, value):
+        result = self.ok("resolve", value)
+        return result["note"], result["profile"], result["matched_by"]
 
-    def test_resolve_refuses_what_is_not_an_eligible_note(self):
-        for target in ("raw/Source.md", "docs/workflows/vault-authoring.md", ".obsidian/workspace.json",
-                       ".claude/index.md", "../outside.md", str(self.tree / NOTE)):
+    def test_resolve_takes_an_exact_path_and_names_the_profile(self):
+        self.assertEqual(self.resolved(NOTE), (NOTE, "thesis", "path"))
+        self.assertEqual(self.resolved(str(self.vault / NOTE)), (NOTE, "thesis", "path"))
+        self.assertEqual(self.resolved("555.tools/Tools-Agent-Trust-Pyramid"), (NOTE, "thesis", "path"))
+        self.assertEqual(self.resolved("111.cs/CS-Harness.md")[1], "atom")
+        self.assertEqual(self.resolved("111.cs/CS-Old-Note.md")[1], "legacy")
+        self.assertEqual(self.resolved("555.tools/Tools-Clip-Page.md")[1], "clip")
+        self.assertEqual(self.resolved(MAP)[1], "map")
+        self.assertEqual(self.resolved("111.cs/筆記.md")[0], "111.cs/筆記.md")
+
+    def test_resolve_takes_a_basename_then_an_alias(self):
+        self.assertEqual(self.resolved("Tools-Agent-Trust-Pyramid"), (NOTE, "thesis", "basename"))
+        self.assertEqual(self.resolved("tools agent trust pyramid.md"), (NOTE, "thesis", "basename"))
+        self.assertEqual(self.resolved("CS Map"), (MAP, "map", "basename"))
+        self.assertEqual(self.resolved("agent trust pyramid"), (NOTE, "thesis", "alias"))
+        self.assertEqual(self.resolved("代理信任金字塔"), (NOTE, "thesis", "alias"))
+        self.assertEqual(self.resolved("筆記"), ("111.cs/筆記.md", "atom", "basename"))
+
+    def test_resolve_lists_the_candidates_when_several_match(self):
+        for value, how, paths in (("Shared-Name", "basename", ["111.cs/Shared-Name.md", "555.tools/Shared-Name.md"]),
+                                  ("Harness", "alias", ["111.cs/CS-Harness.md", "555.tools/Tools-Harness-Setup.md"])):
+            with self.subTest(value=value):
+                code, result, err = self.run_script("resolve", value)
+                self.assertEqual(code, 3, result)
+                self.assertNotIn("note", result)
+                self.assertEqual([c["note"] for c in result["candidates"]], paths)
+                self.assertEqual({c["matched_by"] for c in result["candidates"]}, {how})
+                self.assertIn("pick one", err)
+
+    def test_resolve_stops_on_no_match_with_suggestions(self):
+        result = self.refused("resolve", "trust pyramid", why="no eligible note matches")
+        self.assertNotIn("note", result)
+        self.assertIn(NOTE, [s["note"] for s in result["suggestions"]])
+        self.refused("resolve", "555.tools/Tools-Missing.md", why="no eligible note matches")
+
+    def test_resolve_refuses_each_target_it_must_never_touch(self):
+        for target, why in (("raw/Source.md", "raw/"), ("docs/workflows/vault-authoring.md", "docs/"),
+                            (".obsidian/workspace.json", "Obsidian"), (".claude/index.md", "generated catalog"),
+                            ("template/Template-Note.md", "scope policy"), ("notes/Loose-Note.md", "scope policy"),
+                            (str(self.tree / NOTE), "agents' worktree folder"), ("../outside.md", "traversal"),
+                            ("/elsewhere/Note.md", "outside the vault")):
             with self.subTest(target=target):
-                self.refused("resolve", target)
-        self.refused("resolve", "Tools-Agent-Trust-Pyramid", why="not an eligible note")
-        self.refused("resolve", "555.tools/Tools-Missing.md", why="no note at")
+                result = self.refused("resolve", target, why=why)
+                self.assertNotIn("note", result)
+
+    def test_resolve_never_returns_a_note_that_lives_only_in_a_worktree(self):
+        self.put(self.tree, "555.tools/Tools-Only-In-Worktree.md", page(aliases="[Worktree Only]"))
+        for value in ("Tools-Only-In-Worktree", "Worktree Only", "555.tools/Tools-Only-In-Worktree.md"):
+            with self.subTest(value=value):
+                self.refused("resolve", value, why="no eligible note matches")
 
     def test_a_worktree_is_not_a_vault(self):
         code, result, _ = self.run_script("resolve", NOTE, vault=self.tree)

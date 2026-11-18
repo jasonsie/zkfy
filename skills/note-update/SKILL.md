@@ -79,7 +79,7 @@ Show, in one gate:
 
   Why: <the edit's reason, in the user's terms>
   Scope: <N>
-  Verified: structural lint, <k> issues on <N>, none new; the ratchet hook checks the commit
+  Verified: structural lint, <k> issues on <N>, none new; ratchet hook and catalog check at commit and ship
   ```
 
 Stop → end the run. `<W>` keeps the carried copy and `<V>` is untouched; say so, and that
@@ -90,7 +90,8 @@ Stop → end the run. `<W>` keeps the carried copy and `<V>` is untouched; say s
 "approve" at the diff gate runs this whole step with no further questions:
 
 1. Restore stray catalog edits, which make the ratchet hook refuse: `git -C "<W>" restore --` each
-   file `git -C "<W>" diff --name-only -- .claude` lists.
+   file that `git -C "<W>" diff --name-only -- .claude/index.md .claude/index .claude/QUALITY.md
+   .claude/lint-baseline.json` lists.
 2. Write the message to a file outside the vault (the scratchpad, or `mktemp`), then
    `git -C "<W>" add -- "<N>"` and `git -C "<W>" commit -F <file>`. The ratchet hook validates the
    staged link graph and stages the rebuilt catalogs.

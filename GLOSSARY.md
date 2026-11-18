@@ -97,4 +97,4 @@ _Avoid_: move, sync, apply
 
 **Land check**:
 The last step after the merge: the primary checkout is fast-forwarded only when its copy of the target note is clean or byte-identical to what merged; a copy edited again is refused with the difference and left alone.
-_Avoid_: pull, cleanup, restore
+_Avoid_: pull, cleanup, sync

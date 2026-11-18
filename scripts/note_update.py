@@ -6,7 +6,8 @@ carried through a linked worktree and landed on main.
                                      alias) and its profile; several matches list the candidates
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts
-  names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
+  names NOTE                         the branch docs/update-<stem-kebab> (dated when origin has it), the
+                                     commit scope, a subject stub
   plan NOTE                          what the plan gate shows: the profile, size-budget warnings, the
                                      inbound links (line, text, the heading each targets) and the links
                                      the primary copy's uncommitted edit already breaks
@@ -53,6 +54,7 @@ Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligibl
 from __future__ import annotations
 
 import argparse
+import datetime
 from collections import Counter, defaultdict
 import difflib
 import hashlib
@@ -333,6 +335,15 @@ def cmd_resolve(root, args):
     raise no_match()
 
 
+def run_slug(note):
+    """The kebab-case stem a run for `note` is named by, or '' when the filename has no ASCII name."""
+    return re.sub(r"[^a-z0-9]+", "-", PurePosixPath(note).stem.lower()).strip("-")
+
+
+def on_origin(root, branch):
+    return bool(out(root, "ls-remote", "--heads", "origin", f"refs/heads/{branch}"))
+
+
 def cmd_state(root, args):
     note, _ = note_of(root, args.note)
     change = tracked_change(root, note)
@@ -344,11 +355,17 @@ def cmd_state(root, args):
 def cmd_names(root, args):
     note, _ = note_of(root, args.note)
     parts = PurePosixPath(note).parts
-    slug = re.sub(r"[^a-z0-9]+", "-", parts[-1][:-3].lower()).strip("-")
+    slug = run_slug(note)
     branch = f"docs/update-{slug}"
     if not slug or not WORK_NAME.fullmatch(branch):
         raise Refused(f"{note}: its filename gives no ASCII branch name; name the worktree by hand "
                       f"(ai-dotfiles worktree new docs/update-<slug>)")
+    if on_origin(root, branch):  # another change already took the name
+        today = datetime.date.today().strftime("%Y%m%d")
+        dated = [f"{branch}-{today}", *(f"{branch}-{today}-{n}" for n in range(2, 10))]
+        branch = next((b for b in dated if not on_origin(root, b)), None)
+        if branch is None:
+            raise Refused(f"docs/update-{slug} and its dated names for today are all taken on origin")
     top = parts[0] if len(parts) > 1 else ""
     scope = re.sub(r"[^a-z0-9]+", "-", re.sub(r"^\d+\.", "", top).lower()).strip("-") or "vault"
     return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}

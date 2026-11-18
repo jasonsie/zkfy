@@ -232,6 +232,14 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual((names["branch"], names["scope"]), ("docs/update-cs-map", "index"))
         self.refused("names", "111.cs/筆記.md", why="no ASCII branch name")
 
+    def test_names_adds_a_date_only_when_origin_has_the_branch(self):
+        self.git(self.vault, "push", "-q", "origin", "HEAD:refs/heads/docs/update-tools-agent-trust-pyramid")
+        branch = self.ok("names", NOTE)["branch"]
+        self.assertRegex(branch, r"^docs/update-tools-agent-trust-pyramid-\d{8}$")
+        self.git(self.vault, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+        self.assertEqual(self.ok("names", NOTE)["branch"], branch + "-2")
+        self.assertEqual(self.ok("names", MAP)["branch"], "docs/update-cs-map")
+
     # --- plan ---
 
     def test_plan_counts_an_atom_body_without_code_or_mental_model(self):

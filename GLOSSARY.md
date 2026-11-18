@@ -80,3 +80,21 @@ _Avoid_: source file, raw copy
 **Adopt**:
 To turn a capture into a clip note at its vault destination: the note moves, its images are renamed after it, and the capture is released only after the note checks out.
 _Avoid_: import, move, promote
+
+### Note update
+
+**Target note**:
+The one eligible note a note-update run lands a change to.
+_Avoid_: the file, the page
+
+**Diff gate**:
+The approval after the change sits in its own worktree: the note's diff, other files touched, the structural lint and the commit message; "approve" there runs the git flow to the end.
+_Avoid_: review step, confirmation
+
+**Carry**:
+To copy the user's uncommitted edit of the target note from the primary checkout into the run's worktree, byte for byte, leaving the primary copy as it is.
+_Avoid_: move, sync, apply
+
+**Land check**:
+The last step after the merge: the primary checkout is fast-forwarded only when its copy of the target note is clean or byte-identical to what merged; a copy edited again is refused with the difference and left alone.
+_Avoid_: pull, cleanup, restore

@@ -238,5 +238,23 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
 
+    def test_a_refused_fast_forward_puts_back_the_index_it_found(self):
+        mine = page("thesis", "My edit.")
+        self.put(self.vault, NOTE, page("thesis", "My staged draft."))
+        self.git(self.vault, "add", NOTE)
+        self.put(self.vault, NOTE, mine)  # status MM: the user's own staging stays theirs
+        self.ok("carry", NOTE, str(self.tree))
+        self.put(self.tree, "z.attachments/pic", "a file the PR adds\n")
+        self.git(self.tree, "add", "z.attachments/pic")
+        self.merge(mine)
+        self.put(self.vault, "z.attachments/pic/inner.txt", "untracked, in the way\n")
+        index = self.git(self.vault, "ls-files", "--stage", "--", NOTE)
+        before = self.snapshot()
+        code, result, _ = self.run_script("land-check", NOTE)
+        self.assertEqual(code, 1, result)
+        self.assertIn("git refused the fast-forward", result["error"])
+        self.assertEqual(self.git(self.vault, "ls-files", "--stage", "--", NOTE), index)
+        self.assertEqual(self.snapshot(), before)
+
 if __name__ == "__main__":
     unittest.main()

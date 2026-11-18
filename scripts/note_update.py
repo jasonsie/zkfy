@@ -280,16 +280,16 @@ def cmd_land_check(root, args):
     if clash:
         raise Refused(f"uncommitted changes in {', '.join(clash[:3])} would block the fast-forward; "
                       f"nothing was touched", {**result, "clash": clash})
-    staged = False
+    entry = None
     if change and head != tip:
         # Stage the identical copy: the fast-forward then keeps it, and the file is never written.
+        entry = git(root, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
         git(root, "add", "--", note)
-        staged = True
     if head != tip:
         p = git(root, "merge", "--ff-only", "--quiet", f"origin/{base}", check=False)
         if p.returncode:
-            if staged:
-                git(root, "restore", "--staged", "--", note)
+            if entry:  # the index entry as the run found it, the user's own staging included
+                git(root, "update-index", "--cacheinfo", entry[0], entry[1], note)
             why = (p.stderr or p.stdout).decode(errors="replace").strip().splitlines()
             raise GitError(f"git refused the fast-forward: {why[0] if why else p.returncode}; "
                            f"the primary copy is as it was")

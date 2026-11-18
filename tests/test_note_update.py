@@ -360,6 +360,22 @@ class NoteUpdateTest(unittest.TestCase):
                      why="not a heading")
         self.assertEqual((self.tree / MANY).read_text(encoding="utf-8"), MANY_LINKS)
 
+    def test_map_line_changes_exactly_one_line_and_adds_no_link(self):
+        line = "- [[Tools-Agent-Trust-Pyramid]] — trust in agent output"
+        result = self.ok("map-line", NOTE, str(self.tree), "--map", MAP, "--line", "4", "--text", line)
+        self.assertEqual((result["old"], result["new"]), ("[[Tools-Agent-Trust-Pyramid]]", line))
+        self.assertEqual(self.git(self.tree, "diff", "--numstat", "--", MAP).split()[:2], ["1", "1"])
+        self.assertIn(line + "\n", (self.tree / MAP).read_text(encoding="utf-8"))
+
+    def test_map_line_refuses_a_new_link_a_lost_link_or_a_non_map(self):
+        for args, why in ((["--map", MAP, "--line", "4", "--text", "[[Tools-Agent-Trust-Pyramid]] [[CS-Harness]]"], "new link"),
+                          (["--map", MAP, "--line", "4", "--text", "trust pyramid"], "must still link"),
+                          (["--map", MAP, "--line", "2", "--text", "x"], "does not link"),
+                          (["--map", "111.cs/CS-Links-In.md", "--line", "8", "--text", "x"], "not a map")):
+            with self.subTest(why=why):
+                self.refused("map-line", NOTE, str(self.tree), *args, why=why)
+        self.assertEqual(self.git(self.tree, "status", "--porcelain"), "")
+
     # --- carry ---
 
     def test_carry_copies_the_primary_copy_byte_for_byte(self):

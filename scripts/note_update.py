@@ -22,6 +22,8 @@ carried through a linked worktree and landed on main.
   repoint NOTE WORKTREE --rename OLD NEW ...
                                      rewrite the anchor of each broken link to heading OLD as NEW (an
                                      empty NEW links the note itself); no link is added or retargeted
+  map-line NOTE WORKTREE --map M --line L --text T
+                                     replace line L of map M, which links NOTE, with T: one line, no new link
   stage-carried NOTE WORKTREE --sha256 S
                                      stage the primary copy, as carried (sha256 S), as the worktree's
                                      index entry, so the hand edit commits before the agent's edit
@@ -563,6 +565,40 @@ def cmd_repoint(root, args):
             "files": sorted(edits), "left": left}
 
 
+def cmd_map_line(root, args):
+    note, scope = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    path = note_path(root, scope, args.map)
+    if not scope.is_map(path):
+        raise Refused(f"{path} is not a map; note-update changes one map line only")
+    corpus = K.Corpus(K.Snapshot(tree))
+    if path not in corpus.notes:
+        raise Refused(f"no map at {path}")
+    data = K.read_file(tree, path)
+    raw = data.decode("utf-8").splitlines(keepends=True)
+    if not 1 <= args.line <= len(raw) or "\n" in args.text or "\r" in args.text:
+        raise Refused(f"--line must name one line of {path} and --text must be one line")
+
+    def linked(parsed):
+        return {tuple(corpus.resolve(t, path)[1]) for n, t, _ in parsed.sites
+                if n == args.line and corpus.resolve(t, path)[0] in ("ok", "anchor")}
+
+    before = linked(corpus.notes[path])
+    if (note,) not in before:
+        raise Refused(f"line {args.line} of {path} does not link {note}")
+    old = raw[args.line - 1]
+    raw[args.line - 1] = args.text + old[len(old.rstrip("\r\n")):]
+    new_data = "".join(raw).encode("utf-8")
+    after = linked(K.Note.parse(path, new_data, scope))
+    if (note,) not in after:
+        raise Refused(f"the new line must still link {note}")
+    if after - before:
+        raise Refused(f"the new line adds a new link ({', '.join(sorted(p for t in after - before for p in t))}); "
+                      f"a map line keeps the links it had")
+    write_atomic(K.safe_path(tree, path), new_data)
+    return {"note": note, "map": path, "line": args.line, "old": old.rstrip("\r\n"), "new": args.text}
+
+
 def base_branch(root):
     """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
     p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
@@ -644,7 +680,7 @@ def cmd_land_check(root, args):
 
 COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
             "carry": cmd_carry, "edit-check": cmd_edit_check, "links": cmd_links, "repoint": cmd_repoint,
-            "stage-carried": cmd_stage_carried, "land-check": cmd_land_check}
+            "map-line": cmd_map_line, "stage-carried": cmd_stage_carried, "land-check": cmd_land_check}
 
 
 def main(argv=None):
@@ -673,6 +709,12 @@ def main(argv=None):
         command.add_argument("worktree")
         command.add_argument("--rename", nargs=2, action="append", required=True, metavar=("OLD", "NEW"),
                              help="a heading the edit renamed (NEW) or removed (NEW empty); repeatable")
+    line = sub.add_parser("map-line")
+    line.add_argument("note")
+    line.add_argument("worktree")
+    line.add_argument("--map", required=True, help="the map's vault-relative path")
+    line.add_argument("--line", required=True, type=int, help="the 1-based line that links NOTE")
+    line.add_argument("--text", required=True, help="the line's new text")
     stage = sub.add_parser("stage-carried")
     stage.add_argument("note")
     stage.add_argument("worktree")

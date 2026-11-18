@@ -5,7 +5,9 @@ carried through a linked worktree and landed on main.
   resolve NOTE                       the eligible note NOTE names (an exact path, else a basename, else an
                                      alias) and its profile; several matches list the candidates
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
-                                     the primary checkout), C (neither); no other file's status counts
+                                     the primary checkout), C (neither); no other file's status counts.
+                                     Also where a stopped run stands, from git and GitHub (no stored
+                                     state): its worktree and owner, its PR, and `next_step`
   names NOTE                         the branch docs/update-<stem-kebab> (dated when origin has it), the
                                      commit scope, a subject stub
   plan NOTE                          what the plan gate shows: the profile, size-budget warnings, the
@@ -340,16 +342,174 @@ def run_slug(note):
     return re.sub(r"[^a-z0-9]+", "-", PurePosixPath(note).stem.lower()).strip("-")
 
 
+def run_name(slug):
+    """A run's work name: docs/update-<slug>, or the dated one `names` gives when origin had it taken."""
+    return re.compile(rf"docs/update-{re.escape(slug)}(?:-\d{{8}}(?:-\d+)?)?")
+
+
 def on_origin(root, branch):
     return bool(out(root, "ls-remote", "--heads", "origin", f"refs/heads/{branch}"))
+
+
+def process_start(pid):
+    p = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else ""
+
+
+def ancestors():
+    """This process's parents up to init: the CLI session that runs the skill is one of them."""
+    found, pid = set(), os.getpid()
+    for _ in range(64):
+        p = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True)
+        parent = p.stdout.strip()
+        if not parent.isdigit() or int(parent) <= 1:
+            break
+        pid = int(parent)
+        found.add(pid)
+    return found
+
+
+def owner_of(worktree):
+    """The live owner of a linked worktree, from ai-dotfiles worktree-guard's claim record (its
+    WORKTREE_GUARD_STATE folder), or None. `mine` is true when the owner is the session running this."""
+    state = Path(os.environ.get("WORKTREE_GUARD_STATE") or "~/.local/state/ai-dotfiles/worktree-guard").expanduser()
+    try:
+        claim = json.loads((state / "claims" / (hashlib.sha1(str(worktree).encode()).hexdigest()[:20] + ".json"))
+                           .read_text())
+    except (OSError, ValueError):
+        return None
+    pid = claim.get("pid") if isinstance(claim, dict) else None
+    if not isinstance(pid, int) or pid <= 1:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None
+    except PermissionError:
+        pass
+    if claim.get("started") and process_start(pid) != claim["started"]:
+        return None
+    return {"cli": str(claim.get("cli", "agent")), "session": str(claim.get("session", "?")), "pid": pid,
+            "mine": pid in ancestors()}
+
+
+def run_worktrees(root, slug):
+    """[(path, work name)] of the linked worktrees under .claude/worktrees that hold a run for this note."""
+    folder = (root / ".claude" / "worktrees").resolve()
+    found = []
+    for line in out(root, "worktree", "list", "--porcelain").splitlines():
+        path = Path(line[len("worktree "):]).resolve() if line.startswith("worktree ") else None
+        if path is None or path.parent != folder:
+            continue
+        try:
+            work = json.loads((folder / f"{path.name}.json").read_text()).get("work")
+        except (OSError, ValueError, AttributeError):
+            work = None
+        work = work or ("docs/" + path.name[len("docs-"):] if path.name.startswith("docs-") else path.name)
+        if run_name(slug).fullmatch(work):
+            found.append((path, work))
+    return found
+
+
+def pull_requests(root, slug):
+    """This note's runs' PRs on GitHub, newest first, asked of gh in the vault's own folder."""
+    p = subprocess.run(["gh", "pr", "list", "--state", "all", "--limit", "100",
+                        "--json", "number,state,headRefName,mergeCommit,url"],
+                       cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if p.returncode:
+        raise GitError("gh pr list: " + ((p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1]))
+    found = [pr for pr in json.loads(p.stdout or "[]") if run_name(slug).fullmatch(pr.get("headRefName", ""))]
+    return sorted(found, key=lambda pr: -pr["number"])
+
+
+def pr_summary(pr):
+    return {"number": pr["number"], "state": pr["state"], "url": pr.get("url"),
+            "merge_commit": (pr.get("mergeCommit") or {}).get("oid")}
+
+
+def worktree_step(root, tree, work, note, case, change, slug):
+    """The next step of a run whose worktree exists. Staging happens only after "approve", so a staged
+    change, or a commit, means the diff gate was passed."""
+    base = base_branch(root)
+    staged = bool(out(tree, "diff", "--cached", "--name-only"))
+    unstaged = bool(out(tree, "diff", "--name-only"))
+    ahead = int(out(tree, "rev-list", "--count", f"origin/{base}..HEAD") or 0)
+    if staged or (ahead and unstaged):
+        return "commit", None, None
+    if ahead:
+        pr = next((pr for pr in pull_requests(root, slug) if pr["headRefName"] == work), None)
+        state = pr and pr["state"]
+        return {"OPEN": "approve", "MERGED": "land-check"}.get(state, "ship"), pr, None
+    copy, head = K.read_file(tree, note), git(tree, "show", f"HEAD:{note}").stdout
+    if copy == head:
+        return {"A": "plan-gate", "B": "carry"}.get(case, "stop"), None, None if case != "C" else CASE_C
+    if copy == K.read_file(root, note):  # the carried copy, not edited yet
+        return ("plan-gate" if case == "A" else "diff-gate"), None, None
+    if change:
+        return "stop", None, (f"the edit's base cannot be checked after a stop: your copy of {note} has uncommitted "
+                              f"edits and the worktree's copy differs from it. Drop the worktree "
+                              f"(ai-dotfiles worktree rm {tree.name} --force) and rerun")
+    return "diff-gate", None, None
+
+
+CASE_C = "case C (no instruction, no uncommitted edit) is not built yet: give an instruction, or edit the note first"
+
+
+def fresh_step(root, note, case, change, slug):
+    """The next step when no worktree holds a run: an open PR is approved, a merged one not yet in the
+    primary checkout is land-checked, a run landed exactly at HEAD is done; anything else starts anew."""
+    for pr in pull_requests(root, slug):
+        if pr["state"] == "OPEN":
+            return "approve", pr, None
+        if pr["state"] != "MERGED" or not (pr.get("mergeCommit") or {}).get("oid"):
+            continue
+        oid = pr["mergeCommit"]["oid"]
+        head = out(root, "rev-parse", "HEAD")
+        if oid == head and case == "C":
+            return "done", pr, None
+        if git(root, "cat-file", "-e", f"{oid}^{{commit}}", check=False).returncode:
+            git(root, "fetch", "--quiet", "origin", base_branch(root), check=False)
+        landed = git(root, "merge-base", "--is-ancestor", oid, head, check=False).returncode == 0
+        if not landed and git(root, "cat-file", "-e", f"{oid}^{{commit}}", check=False).returncode == 0:
+            brought = {blob(root, c, note) for c in out(root, "rev-list", oid, "--not", head, "--", note).split()}
+            if not change or file_blob(root, note) in brought | {blob(root, oid, note)}:
+                return "land-check", pr, None
+        break  # only the newest merged run can still be landing
+    return {"A": "plan-gate", "B": "worktree"}.get(case, "stop"), None, None if case != "C" else CASE_C
 
 
 def cmd_state(root, args):
     note, _ = note_of(root, args.note)
     change = tracked_change(root, note)
     case = "A" if args.instruction_given else ("B" if change else "C")
-    return {"note": note, "case": case, "dirty": bool(change), "status": change,
-            "instruction_given": args.instruction_given}
+    result = {"note": note, "case": case, "dirty": bool(change), "status": change,
+              "instruction_given": args.instruction_given}
+    slug = run_slug(note)
+    trees = run_worktrees(root, slug) if slug else []
+    if len(trees) > 1:
+        raise Refused(f"several worktrees hold a run for {note}: {', '.join(p.name for p, _ in trees)}; "
+                      f"remove all but one (ai-dotfiles worktree rm <name>)")
+    run, pr, reason = None, None, None
+    if trees:
+        tree, work = trees[0]
+        owner = owner_of(tree)
+        run = {"branch": work, "worktree": str(tree), "owner": owner}
+        if owner and not owner["mine"]:
+            step = "owned"
+            reason = (f"{owner['cli']} session {owner['session'][:8]} owns {tree.name}; finish the run there, "
+                      f"or wait for that session to end. No takeover")
+        else:
+            step, pr, reason = worktree_step(root, tree, work, note, case, change, slug)
+    elif slug:
+        step, pr, reason = fresh_step(root, note, case, change, slug)
+        if pr:
+            run = {"branch": pr["headRefName"], "worktree": None, "owner": None}
+    else:
+        step = {"A": "plan-gate", "B": "worktree"}.get(case, "stop")
+        reason = None if case != "C" else CASE_C
+    if run is not None:
+        run["pr"] = pr_summary(pr) if pr else None
+    return {**result, "run": run, "next_step": step, **({"reason": reason} if reason else {})}
 
 
 def cmd_names(root, args):

@@ -1,9 +1,11 @@
 """note_update.py through its command line only, the way the note-update skill runs it, against a
 temporary vault (spaces and CJK in its path), a bare origin, a linked worktree and a fake `gh`.
 Run: python3 -B -m unittest discover -s tests -p 'test_note_update.py' -v"""
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -70,9 +72,16 @@ class NoteUpdateTest(unittest.TestCase):
         self.gh_log = base / "gh-calls.log"
         self.bin.mkdir()
         gh = self.bin / "gh"
-        gh.write_text(f'#!/bin/sh\necho "$*" >> "{self.gh_log}"\necho "gh: unexpected call" >&2\nexit 97\n')
+        # Logs where it ran and its arguments; answers `pr list` only when a test hands it PRs.
+        gh.write_text(f'#!/bin/sh\necho "$PWD|$*" >> "{self.gh_log}"\n'
+                      'if [ -n "$FAKE_GH_PRS" ]; then cat "$FAKE_GH_PRS"; exit 0; fi\n'
+                      'echo "gh: unexpected call" >&2\nexit 97\n')
         gh.chmod(0o755)
-        self.env = {**os.environ, "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"}
+        self.guard = base / "guard"
+        self.env = {**os.environ, "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                    "WORKTREE_GUARD_STATE": str(self.guard)}
+        self.env.pop("FAKE_GH_PRS", None)
+        self.gh_used = False
         self.git(base, "init", "-q", "--bare", "-b", "main", str(self.origin))
         self.git(base, "init", "-q", "-b", "main", str(self.vault))
         for name, text in FILES.items():
@@ -89,7 +98,14 @@ class NoteUpdateTest(unittest.TestCase):
         self.git(self.vault, "worktree", "add", "-q", "--detach", str(self.tree), "origin/main")
 
     def tearDown(self):
-        self.assertFalse(self.gh_log.exists(), "note_update.py called gh")
+        if self.gh_used:
+            calls = self.gh_log.read_text().splitlines() if self.gh_log.exists() else []
+            self.assertTrue(all(c.split("|", 1)[0] == str(self.vault) for c in calls), calls)  # gh runs in the vault
+        else:
+            self.assertFalse(self.gh_log.exists(), "note_update.py called gh")
+        for proc in getattr(self, "procs", []):
+            proc.kill()
+            proc.wait()
         self.tmp.cleanup()
 
     # --- helpers ---
@@ -222,6 +238,109 @@ class NoteUpdateTest(unittest.TestCase):
     def test_state_refuses_an_untracked_note(self):
         self.put(self.vault, "555.tools/Tools-New.md", page())
         self.refused("state", "555.tools/Tools-New.md", why="not tracked")
+
+    # --- state: where a stopped run stands ---
+
+    BRANCH = "docs/update-tools-agent-trust-pyramid"
+
+    def prs(self, *found):
+        path = Path(self.tmp.name) / "prs.json"
+        path.write_text(json.dumps([{"number": n, "state": s, "headRefName": b, "url": f"https://x/pull/{n}",
+                                     "mergeCommit": {"oid": oid} if oid else None} for n, s, b, oid in found]))
+        self.env["FAKE_GH_PRS"] = str(path)
+        self.gh_used = True
+
+    def meta(self):
+        (self.tree.parent / f"{self.tree.name}.json").write_text(json.dumps({"work": self.BRANCH}))
+
+    def claim(self, pid):
+        claims = self.guard / "claims"
+        claims.mkdir(parents=True, exist_ok=True)
+        key = hashlib.sha1(str(self.tree).encode()).hexdigest()[:20]
+        (claims / f"{key}.json").write_text(json.dumps({"session": "abcdef123456", "cli": "claude", "pid": pid}))
+
+    def step(self, *args):
+        result = self.ok("state", NOTE, *args)
+        return result["next_step"], result
+
+    def drop_tree(self):
+        self.git(self.vault, "worktree", "remove", "--force", str(self.tree))
+
+    def test_state_next_step_before_any_worktree(self):
+        self.drop_tree()
+        self.prs()
+        self.assertEqual(self.step("--instruction-given")[0], "plan-gate")
+        self.assertEqual(self.step()[0], "stop")  # case C is not built yet
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        self.assertEqual(self.step()[0], "worktree")
+
+    def test_state_next_step_in_the_worktree_before_approval(self):
+        self.meta()
+        mine = page("thesis", "My edit.")
+        self.put(self.vault, NOTE, mine)
+        step, result = self.step()
+        self.assertEqual((step, result["run"]["branch"], result["run"]["worktree"]), ("carry", self.BRANCH, str(self.tree)))
+        self.ok("carry", NOTE, str(self.tree))
+        self.assertEqual(self.step()[0], "diff-gate")                      # case B: the carried copy waits for its gate
+        self.assertEqual(self.step("--instruction-given")[0], "plan-gate")  # case A: the edit is not made yet
+        self.put(self.tree, NOTE, page("thesis", "My edit. The agent's edit."))
+        step, result = self.step("--instruction-given")
+        self.assertEqual(step, "stop")                                      # a dirty base that cannot be checked
+        self.assertIn("cannot be checked", result["reason"])
+
+    def test_state_next_step_for_a_clean_case_a_edit(self):
+        self.meta()
+        self.assertEqual(self.step("--instruction-given")[0], "plan-gate")
+        self.put(self.tree, NOTE, page("thesis", "The agent's edit."))
+        self.assertEqual(self.step("--instruction-given")[0], "diff-gate")
+        self.git(self.tree, "add", NOTE)
+        self.assertEqual(self.step()[0], "commit")                          # staged: the diff gate was approved
+
+    def test_state_next_step_after_the_commit(self):
+        self.meta()
+        self.put(self.tree, NOTE, page("thesis", "The agent's edit."))
+        self.git(self.tree, "commit", "-qam", "docs(tools): edit")
+        self.prs()
+        self.assertEqual(self.step()[0], "ship")
+        self.git(self.tree, "push", "-q", "origin", f"HEAD:refs/heads/{self.BRANCH}")
+        self.prs((7, "OPEN", self.BRANCH, None))
+        step, result = self.step()
+        self.assertEqual((step, result["run"]["pr"]["number"]), ("approve", 7))
+        self.drop_tree()                                                    # ship deleted it
+        self.assertEqual(self.step()[0], "approve")
+
+    def test_state_next_step_after_the_merge_and_the_landing(self):
+        self.merge(page("thesis", "The agent's edit."))
+        merged = self.git(self.tree, "rev-parse", "HEAD")
+        self.drop_tree()
+        self.prs((7, "MERGED", self.BRANCH, merged), (3, "MERGED", self.BRANCH, "0" * 40))
+        self.assertEqual(self.step()[0], "land-check")
+        self.ok("land-check", NOTE)
+        self.assertEqual(self.step()[0], "done")
+        self.put(self.vault, NOTE, page("thesis", "A new edit, later."))
+        self.assertEqual(self.step()[0], "worktree")                        # a landed PR never captures a new run
+
+    def test_state_ignores_an_old_merge_the_copy_does_not_match(self):
+        self.merge(page("thesis", "Merged long ago."))
+        merged = self.git(self.tree, "rev-parse", "HEAD")
+        self.drop_tree()
+        self.prs((7, "MERGED", self.BRANCH, merged))
+        self.put(self.vault, NOTE, page("thesis", "A new edit on the old base."))
+        self.assertEqual(self.step()[0], "worktree")
+
+    def test_state_stops_on_another_sessions_worktree(self):
+        self.meta()
+        other = subprocess.Popen(["sleep", "60"])
+        self.procs = [other]
+        self.claim(other.pid)
+        step, result = self.step()
+        self.assertEqual(step, "owned")
+        self.assertEqual(result["run"]["owner"]["mine"], False)
+        self.assertIn("claude session abcdef12", result["reason"])
+        self.claim(os.getpid())                                              # this session's own claim
+        self.assertNotEqual(self.step()[0], "owned")
+        self.claim(2 ** 22 + 12345)                                          # an owner that is gone
+        self.assertIsNone(self.step()[1]["run"]["owner"])
 
     # --- names ---
 

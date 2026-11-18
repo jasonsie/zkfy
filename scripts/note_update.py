@@ -135,19 +135,19 @@ def status_of(root, note):
 
 def tracked_change(root, note):
     """Whether the primary copy of `note` has uncommitted edits; refuses what note-update does not carry."""
-    code = status_of(root, note)
-    if code == "??":
+    status = status_of(root, note)
+    if status == "??":
         raise Refused(f"{note} is not tracked; note-update changes notes already on the base branch")
-    if "U" in code or code in ("AA", "DD"):
+    if "U" in status or status in ("AA", "DD"):
         raise Refused(f"{note} has merge conflicts; resolve them first")
-    if "D" in code:
+    if "D" in status:
         raise Refused(f"{note} is deleted in the primary checkout")
-    if code[:1] in ("A", "R", "C"):
-        raise Refused(f"{note} is staged as {'added' if code[0] == 'A' else 'renamed or copied'}; "
+    if status[:1] in ("A", "R", "C"):
+        raise Refused(f"{note} is staged as {'added' if status[0] == 'A' else 'renamed or copied'}; "
                       f"note-update changes one existing note in place")
     if not blob(root, "HEAD", note):
         raise Refused(f"{note} is not on the checked-out branch")
-    return code
+    return status
 
 
 # --- subcommands -----------------------------------------------------------------------------------
@@ -164,9 +164,9 @@ def cmd_resolve(root, args):
 
 def cmd_state(root, args):
     note, _ = note_of(root, args.note)
-    code = tracked_change(root, note)
-    case = "A" if args.instruction_given else ("B" if code else "C")
-    return {"note": note, "case": case, "dirty": bool(code), "status": code,
+    change = tracked_change(root, note)
+    case = "A" if args.instruction_given else ("B" if change else "C")
+    return {"note": note, "case": case, "dirty": bool(change), "status": change,
             "instruction_given": args.instruction_given}
 
 
@@ -199,10 +199,10 @@ def linked_worktree(root, value):
 def cmd_carry(root, args):
     note, _ = note_of(root, args.note)
     tree = linked_worktree(root, args.worktree)
-    base, theirs = blob(root, "HEAD", note), blob(tree, "HEAD", note)
-    if not base:
+    primary_head, tree_head = blob(root, "HEAD", note), blob(tree, "HEAD", note)
+    if not primary_head:
         raise Refused(f"{note} is not on the primary checkout's branch")
-    if base != theirs:
+    if primary_head != tree_head:
         raise Refused(f"{note} differs between the primary checkout's HEAD and the worktree's HEAD "
                       f"(it changed on the base branch since your copy's base); carrying would undo that change")
     source = K.safe_path(root, note)
@@ -211,7 +211,7 @@ def cmd_carry(root, args):
     if target.is_file() and target.read_bytes() == data:
         carried = False
     else:
-        if not target.is_file() or file_blob(tree, note) != theirs:
+        if not target.is_file() or file_blob(tree, note) != tree_head:
             raise Refused(f"the worktree's copy of {note} has edits of its own; carry never overwrites them")
         fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".note-update-", suffix=".tmp")
         try:
@@ -244,7 +244,7 @@ def base_branch(root):
     raise GitError("origin's default branch is unknown; run: git remote set-head origin --auto")
 
 
-def names_z(root, *args):
+def paths_of(root, *args):
     return {os.fsdecode(x) for x in git(root, *args).stdout.split(b"\0") if x}
 
 
@@ -256,36 +256,36 @@ def cmd_land_check(root, args):
     if ref != f"refs/heads/{base}":
         on = ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else "a detached HEAD"
         raise Refused(f"the primary checkout is on {on}, not {base}")
-    head, target = out(root, "rev-parse", "HEAD"), out(root, "rev-parse", f"origin/{base}")
+    head, tip = out(root, "rev-parse", "HEAD"), out(root, "rev-parse", f"origin/{base}")
     merged = blob(root, f"origin/{base}", note)
     if not merged:
         raise Refused(f"origin/{base} has no {note}")
-    code = tracked_change(root, note)
+    change = tracked_change(root, note)
     copy = file_blob(root, note)
-    result = {"note": note, "base": base, "from": head, "to": target, "dirty": bool(code),
+    result = {"note": note, "base": base, "from": head, "to": tip, "dirty": bool(change),
               "identical": copy == merged}
-    if code and copy != merged:
+    if change and copy != merged:
         old = git(root, "cat-file", "blob", merged).stdout.decode("utf-8", "replace").splitlines(keepends=True)
         new = K.read_file(root, note).decode("utf-8", "replace").splitlines(keepends=True)
         diff = "".join(difflib.unified_diff(old, new, f"origin/{base}:{note}", f"{note} (primary copy)"))
         raise Refused(f"{note} in the primary checkout differs from what merged; nothing was touched",
                       {**result, "difference": diff})
-    if head != target and git(root, "merge-base", "--is-ancestor", head, target, check=False).returncode:
+    if head != tip and git(root, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
         raise Refused(f"{base} has commits origin/{base} lacks; nothing was touched")
-    incoming = names_z(root, "diff", "--name-only", "-z", "--no-renames", head, target)
-    dirty = (names_z(root, "diff", "--name-only", "-z", "--no-renames")
-             | names_z(root, "diff", "--name-only", "-z", "--no-renames", "--cached")
-             | names_z(root, "ls-files", "-z", "--others", "--exclude-standard"))
-    clash = sorted((incoming & dirty) - {note})
+    incoming = paths_of(root, "diff", "--name-only", "-z", "--no-renames", head, tip)
+    uncommitted = (paths_of(root, "diff", "--name-only", "-z", "--no-renames")
+                   | paths_of(root, "diff", "--name-only", "-z", "--no-renames", "--cached")
+                   | paths_of(root, "ls-files", "-z", "--others", "--exclude-standard"))
+    clash = sorted((incoming & uncommitted) - {note})
     if clash:
         raise Refused(f"uncommitted changes in {', '.join(clash[:3])} would block the fast-forward; "
                       f"nothing was touched", {**result, "clash": clash})
     staged = False
-    if code and head != target:
+    if change and head != tip:
         # Stage the identical copy: the fast-forward then keeps it, and the file is never written.
         git(root, "add", "--", note)
         staged = True
-    if head != target:
+    if head != tip:
         p = git(root, "merge", "--ff-only", "--quiet", f"origin/{base}", check=False)
         if p.returncode:
             if staged:
@@ -294,7 +294,7 @@ def cmd_land_check(root, args):
             raise GitError(f"git refused the fast-forward: {why[0] if why else p.returncode}; "
                            f"the primary copy is as it was")
     left = status_of(root, note)
-    return {**result, "fast_forwarded": head != target, "restored": bool(code) and not left, "status": left}
+    return {**result, "fast_forwarded": head != tip, "restored": bool(change) and not left, "status": left}
 
 
 # --- the command line ------------------------------------------------------------------------------

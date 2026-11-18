@@ -11,6 +11,9 @@ carried through a linked worktree and landed on main.
                                      inbound links (from notes and maps, with the heading each targets)
   carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
                                      check the two are byte-identical
+  edit-check NOTE WORKTREE           the worktree's copy against the primary copy: each section same,
+                                     changed, added or removed; frontmatter keys; Src and Link; a clip
+                                     body; the budget after. Facts only: `problems` lists rule breaks
   land-check NOTE                    after the merge: fast-forward the primary checkout to origin's base,
                                      only when the primary copy is clean or byte-identical to the merged
                                      blob; otherwise refuse and print the difference
@@ -18,7 +21,7 @@ carried through a linked worktree and landed on main.
 --vault is the primary checkout, never inferred from the current folder. Each subcommand prints one
 JSON object on stdout; a stop also prints its reason on stderr (a diverged land-check, the difference
 too). The primary copy is only ever read: land-check stages an identical copy so the fast-forward
-keeps it, and never stashes, resets or writes it.
+keeps it, and never stashes, resets or writes it. edit-check's base is the primary copy as it is now.
 
 Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why) ·
 3 resolve found several notes ("candidates"; pick one by its path).
@@ -27,6 +30,7 @@ Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, eligibl
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import difflib
 import hashlib
 import importlib.util
@@ -367,6 +371,55 @@ def cmd_carry(root, args):
     return result
 
 
+def frontmatter_block(data):
+    lines = data.decode("utf-8-sig").splitlines(keepends=True)
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end is not None:
+            return "".join(lines[:end + 1])
+    return ""
+
+
+def section_texts(note, data):
+    """{(title, occurrence): the section's exact text}, in order."""
+    raw = data.decode("utf-8-sig").splitlines(keepends=True)
+    seen, texts = Counter(), {}
+    for title, lines in sections(note):
+        seen[title] += 1
+        texts[(title, seen[title])] = "".join(raw[n - 1] for n, _ in lines)
+    return texts
+
+
+def cmd_edit_check(root, args):
+    note, scope = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    old_data, new_data = K.read_file(root, note), K.read_file(tree, note)
+    old, new = K.Note.parse(note, old_data, scope), K.Note.parse(note, new_data, scope)
+    before, after = list(old.meta), list(new.meta)
+    keys = {"added": [k for k in after if k not in before], "removed": [k for k in before if k not in after],
+            "reordered": [k for k in before if k in after] != [k for k in after if k in before]}
+    provenance = [k for k in ("Src", "Link") if old.meta.get(k) != new.meta.get(k)]
+    old_texts, new_texts = section_texts(old, old_data), section_texts(new, new_data)
+    found = []
+    for key, text in old_texts.items():
+        status = "removed" if key not in new_texts else "same" if new_texts[key] == text else "changed"
+        found.append({"heading": key[0], "status": status})
+    found += [{"heading": key[0], "status": "added"} for key in new_texts if key not in old_texts]
+    profile = {"before": profile_of(scope, old), "after": profile_of(scope, new)}
+    problems = [f"frontmatter keys {how}: {', '.join(keys[how])}" for how in ("added", "removed") if keys[how]]
+    problems += ["frontmatter keys reordered"] if keys["reordered"] else []
+    problems += [f"{k} changed; provenance stays as it is" for k in provenance]
+    if profile["before"] != profile["after"]:
+        problems.append(f"profile changed from {profile['before']} to {profile['after']}")
+    if profile["before"] == "clip" and any(s["status"] != "same" and s["heading"].casefold() != "links"
+                                           for s in found):
+        problems.append("a clip note's body changed; it stays verbatim (ADR-0004)")
+    return {"note": note, "worktree": str(tree),
+            "frontmatter": "same" if frontmatter_block(old_data) == frontmatter_block(new_data) else "changed",
+            "keys": keys, "provenance_changed": provenance, "sections": found, "profile": profile,
+            "budget": budget(new, scope), "problems": problems}
+
+
 def base_branch(root):
     """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
     p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
@@ -436,7 +489,8 @@ def cmd_land_check(root, args):
 # --- the command line ------------------------------------------------------------------------------
 
 COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
-            "carry": cmd_carry, "land-check": cmd_land_check}
+            "carry": cmd_carry, "edit-check": cmd_edit_check,
+            "land-check": cmd_land_check}
 
 
 def main(argv=None):
@@ -451,6 +505,9 @@ def main(argv=None):
     c = sub.add_parser("carry")
     c.add_argument("note")
     c.add_argument("worktree", help="the linked worktree the note is carried into")
+    e = sub.add_parser("edit-check")
+    e.add_argument("note")
+    e.add_argument("worktree", help="the linked worktree holding the edited copy")
     args = parser.parse_args(argv)
     try:
         root = primary(args.vault)

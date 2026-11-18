@@ -245,6 +245,36 @@ class NoteUpdateTest(unittest.TestCase):
             {"from": "111.cs/CS-Links-In.md", "map": False, "heading": None, "broken": False},
             {"from": "111.cs/CS-Links-In.md", "map": False, "heading": "Abstract", "broken": False}])
 
+    # --- edit-check ---
+
+    def edited(self, note, old, new):
+        self.put(self.tree, note, (self.tree / note).read_text(encoding="utf-8").replace(old, new, 1))
+        return self.ok("edit-check", note, str(self.tree))
+
+    def test_edit_check_names_the_one_changed_section(self):
+        check = self.edited("555.tools/Tools-Thesis-Themes.md", "Model.", "A better model.")
+        self.assertEqual(check["frontmatter"], "same")
+        self.assertEqual([(s["heading"], s["status"]) for s in check["sections"]],
+                         [("執行摘要", "same"), ("Mental Model", "changed"), ("Short Theme", "same"),
+                          ("Right Theme", "same"), ("Links", "same")])
+        self.assertEqual(check["problems"], [])
+        self.assertEqual(check["profile"], {"before": "thesis", "after": "thesis"})
+
+    def test_edit_check_flags_frontmatter_keys_and_provenance(self):
+        check = self.edited("555.tools/Tools-Thesis-Themes.md", "Src: 'https://example.com/talk'\n",
+                            "Src: 'https://example.com/other'\nSub-Categories: [x]\n")
+        self.assertEqual(check["frontmatter"], "changed")
+        self.assertEqual(check["keys"]["added"], ["Sub-Categories"])
+        self.assertEqual(check["provenance_changed"], ["Src"])
+        self.assertEqual(len(check["problems"]), 2)
+
+    def test_edit_check_flags_a_clip_body_change_but_not_its_links(self):
+        clip = "555.tools/Tools-Clip-Page.md"
+        self.assertEqual(self.edited(clip, "### Links\n", "### Links\n- [[CS-Harness]]\n")["problems"], [])
+        check = self.edited(clip, "Verbatim.", "Summarised.")
+        self.assertEqual(len(check["problems"]), 1)
+        self.assertIn("ADR-0004", check["problems"][0])
+
     # --- carry ---
 
     def test_carry_copies_the_primary_copy_byte_for_byte(self):

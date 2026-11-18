@@ -893,6 +893,8 @@ def main(argv=None):
                 differences = write_outputs(snap, corpus.outputs(), args.check)
                 report = {"differences": differences, "check": args.check, "notes": len(corpus.notes)}
                 code = args.check and bool(differences)
+                if code:  # ship's Verify step reports a failed check by its last stderr line
+                    print(f"knowledge: stale catalog: {', '.join(differences)}; run build", file=sys.stderr)
             elif args.command == "reorg":
                 sys.modules.setdefault("knowledge", sys.modules[__name__])
                 import reorg

@@ -7,8 +7,9 @@ carried through a linked worktree and landed on main.
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts
   names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
-  plan NOTE                          what the plan gate shows: the profile, size-budget warnings and the
-                                     inbound links (from notes and maps, with the heading each targets)
+  plan NOTE                          what the plan gate shows: the profile, size-budget warnings, the
+                                     inbound links (line, text, the heading each targets) and the links
+                                     the primary copy's uncommitted edit already breaks
   carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
                                      check the two are byte-identical
   edit-check NOTE WORKTREE [--sha256 S]
@@ -338,21 +339,33 @@ def cmd_names(root, args):
     return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}
 
 
-def cmd_plan(root, args):
-    note, _ = note_of(root, args.note)
-    corpus = K.Corpus(K.Snapshot(root))  # the link graph the ratchet hook validates
-    inbound = []
+def inbound_sites(corpus, note):
+    """Each link in another eligible note that resolves to `note`: (from, (line, target, text), status)."""
     for path, other in sorted(corpus.notes.items()):
         if path == note:
             continue
-        for link in sorted(set(other.links)):
-            status, hits = corpus.resolve(link, path)
+        for site in other.sites:
+            status, hits = corpus.resolve(site[1], path)
             if hits == [note] and status in ("ok", "anchor"):
-                inbound.append({"from": path, "map": corpus.scope.is_map(path),
-                                "heading": unquote(link).partition("#")[2] or None, "broken": status == "anchor"})
+                yield path, site, status
+
+
+def anchor_breaks(corpus, note):
+    """{(from, link)} of the corpus's own link-anchor issues that point into `note`: what the ratchet sees."""
+    return {(i["path"], i["detail"]) for i in corpus.issues()
+            if i["rule"] == "link-anchor" and corpus.resolve(i["detail"], i["path"])[1] == [note]}
+
+
+def cmd_plan(root, args):
+    note, _ = note_of(root, args.note)
+    corpus = K.Corpus(K.Snapshot(root))  # the link graph the ratchet hook validates
+    inbound = [{"from": path, "line": line, "text": dict(corpus.notes[path].lines)[line].strip(),
+                "map": corpus.scope.is_map(path), "heading": unquote(link).partition("#")[2] or None,
+                "broken": status == "anchor"} for path, (line, link, _), status in inbound_sites(corpus, note)]
+    edited = sorted(anchor_breaks(corpus, note) - anchor_breaks(K.Corpus(K.Snapshot(root, "head")), note))
     target = corpus.notes[note]
     return {"note": note, "profile": profile_of(corpus.scope, target), "budget": budget(target, corpus.scope),
-            "inbound": inbound}
+            "inbound": inbound, "broken_by_edit": [{"from": path, "link": link} for path, link in edited]}
 
 
 def linked_worktree(root, value):

@@ -28,6 +28,13 @@ THEMES = ("---\nDate: 2026-11-01\nType: literature\nMode: thesis\nCategories: [T
           "Src: 'https://example.com/talk'\n---\n### 執行摘要\nSummary.\n### Mental Model\nModel.\n"
           "### Short Theme\n" + "word " * 150 + "\n### Right Theme\n" + "字" * 300 + "\n### Links\n")
 
+THEMES_NOTE = "555.tools/Tools-Thesis-Themes.md"
+MANY = "111.cs/CS-Many-Links.md"
+MANY_LINKS = ("---\nDate: 2026-11-01\nType: literature\nCategories: [CS]\nAliases: []\n---\n### Abstract\n"
+              + "".join(f"- [[Tools-Thesis-Themes#Short Theme]] point {i}\n" for i in range(30))
+              + "- [[Tools-Thesis-Themes#Short Theme|the short one]] and [[CS-Harness]]\n"
+              + "- [short](555.tools/Tools-Thesis-Themes.md#Short%20Theme)\n### Links\n")
+
 
 FILES = {
     "docs/knowledge/scope.json": json.dumps(SCOPE),
@@ -41,7 +48,8 @@ FILES = {
     MAP: "---\nType: structure\n---\n[[Tools-Agent-Trust-Pyramid]]\n",
     "111.cs/筆記.md": page("atom"),
     "111.cs/CS-Long-Atom.md": LONG_ATOM,
-    "555.tools/Tools-Thesis-Themes.md": THEMES,
+    THEMES_NOTE: THEMES,
+    MANY: MANY_LINKS,
     "111.cs/CS-Links-In.md": page(body="See [[Tools-Agent-Trust-Pyramid#Abstract]] and [[Tools-Agent-Trust-Pyramid]]."),
     "raw/Source.md": "a source\n",
     "docs/workflows/vault-authoring.md": "rules\n",
@@ -244,10 +252,17 @@ class NoteUpdateTest(unittest.TestCase):
     def test_plan_lists_the_inbound_links_and_the_headings_they_target(self):
         plan = self.ok("plan", NOTE)
         self.assertEqual((plan["note"], plan["profile"]), (NOTE, "thesis"))
-        self.assertEqual(plan["inbound"], [
-            {"from": MAP, "map": True, "heading": None, "broken": False},
-            {"from": "111.cs/CS-Links-In.md", "map": False, "heading": None, "broken": False},
-            {"from": "111.cs/CS-Links-In.md", "map": False, "heading": "Abstract", "broken": False}])
+        self.assertEqual([(i["from"], i["line"], i["heading"], i["map"], i["broken"]) for i in plan["inbound"]], [
+            (MAP, 4, None, True, False),
+            ("111.cs/CS-Links-In.md", 8, "Abstract", False, False),
+            ("111.cs/CS-Links-In.md", 8, None, False, False)])
+        self.assertEqual(plan["inbound"][0]["text"], "[[Tools-Agent-Trust-Pyramid]]")
+        self.assertEqual(plan["broken_by_edit"], [])
+
+    def test_plan_names_the_links_the_users_own_edit_breaks(self):
+        self.put(self.vault, NOTE, page("thesis", "Mine.").replace("### Abstract", "### Overview"))
+        self.assertEqual(self.ok("plan", NOTE)["broken_by_edit"],
+                         [{"from": "111.cs/CS-Links-In.md", "link": "Tools-Agent-Trust-Pyramid#Abstract"}])
 
     # --- edit-check ---
 

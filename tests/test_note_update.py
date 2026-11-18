@@ -155,6 +155,88 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual((names["branch"], names["scope"]), ("docs/update-cs-map", "index"))
         self.refused("names", "111.cs/筆記.md", why="no ASCII branch name")
 
+    # --- carry ---
+
+    def test_carry_copies_the_primary_copy_byte_for_byte(self):
+        self.put(self.vault, NOTE, page("thesis", "My edit, 我的修改."))
+        before = self.snapshot()
+        result = self.ok("carry", NOTE, str(self.tree))
+        self.assertEqual((result["carried"], result["identical"]), (True, True))
+        self.assertEqual((self.tree / NOTE).read_bytes(), (self.vault / NOTE).read_bytes())
+        self.assertEqual(self.snapshot(), before)
+        again = self.ok("carry", NOTE, str(self.tree))
+        self.assertEqual((again["carried"], again["identical"]), (False, True))
+
+    def test_carry_never_overwrites_the_worktrees_own_edits(self):
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        self.put(self.tree, NOTE, page("thesis", "The agent's edit."))
+        self.refused("carry", NOTE, str(self.tree), why="edits of its own")
+        self.assertIn("The agent's edit.", (self.tree / NOTE).read_text(encoding="utf-8"))
+
+    def test_carry_refuses_when_the_note_changed_on_the_base_since(self):
+        self.merge(page("thesis", "Merged elsewhere."))
+        other = self.vault / ".claude/worktrees/docs-later"
+        self.git(self.vault, "fetch", "-q", "origin")
+        self.git(self.vault, "worktree", "add", "-q", "--detach", str(other), "origin/main")
+        self.put(self.vault, NOTE, page("thesis", "My edit on the old base."))
+        self.refused("carry", NOTE, str(other), why="carrying would undo that change")
+        self.assertIn("Merged elsewhere.", (other / NOTE).read_text(encoding="utf-8"))
+
+    def test_carry_needs_a_linked_worktree_of_this_vault(self):
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        for where in (self.vault, Path(self.tmp.name) / "bin"):
+            with self.subTest(where=where):
+                self.refused("carry", NOTE, str(where), why="worktree")
+
+    # --- land-check ---
+
+    def test_land_check_fast_forwards_when_the_copy_is_what_merged(self):
+        mine = page("thesis", "My edit, 我的修改.")
+        self.put(self.vault, NOTE, mine)
+        self.put(self.vault, ".obsidian/workspace.json", '{"open": 1}\n')
+        self.ok("carry", NOTE, str(self.tree))
+        self.merge(mine)
+        inode = (self.vault / NOTE).stat().st_ino
+        result = self.ok("land-check", NOTE)
+        self.assertEqual((result["identical"], result["fast_forwarded"], result["restored"]), (True, True, True))
+        self.assertEqual(self.git(self.vault, "rev-parse", "HEAD"), self.git(self.vault, "rev-parse", "origin/main"))
+        self.assertEqual(self.git(self.vault, "status", "--porcelain"), "M .obsidian/workspace.json")
+        self.assertEqual((self.vault / NOTE).read_text(encoding="utf-8"), mine)
+        self.assertEqual((self.vault / NOTE).stat().st_ino, inode)  # staged, never rewritten
+
+    def test_land_check_refuses_a_copy_that_diverged_and_touches_nothing(self):
+        mine = page("thesis", "My edit.")
+        self.put(self.vault, NOTE, mine)
+        self.ok("carry", NOTE, str(self.tree))
+        self.merge(mine)
+        self.put(self.vault, NOTE, page("thesis", "My edit, and a later one."))
+        before = self.snapshot()
+        result = self.refused("land-check", NOTE, why="differs from what merged")
+        self.assertIn("+My edit, and a later one.", result["difference"])
+        self.assertIn("-My edit.", result["difference"])
+        _, _, err = self.run_script("land-check", NOTE)
+        self.assertIn("+My edit, and a later one.", err)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_land_check_fast_forwards_a_clean_primary(self):
+        self.merge(page("thesis", "The agent's edit."))
+        result = self.ok("land-check", NOTE)
+        self.assertEqual((result["dirty"], result["fast_forwarded"], result["restored"]), (False, True, False))
+        self.assertIn("The agent's edit.", (self.vault / NOTE).read_text(encoding="utf-8"))
+        self.assertEqual(self.git(self.vault, "status", "--porcelain"), "")
+
+    def test_land_check_refuses_before_touching_when_another_file_blocks(self):
+        mine = page("thesis", "My edit.")
+        self.put(self.vault, NOTE, mine)
+        self.ok("carry", NOTE, str(self.tree))
+        self.put(self.tree, "111.cs/CS-Harness.md", page("atom", "Also changed by the PR."))
+        self.merge(mine)
+        self.put(self.vault, "111.cs/CS-Harness.md", page("atom", "Uncommitted here."))
+        before = self.snapshot()
+        result = self.refused("land-check", NOTE, why="would block the fast-forward")
+        self.assertEqual(result["clash"], ["111.cs/CS-Harness.md"])
+        self.assertEqual(self.snapshot(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

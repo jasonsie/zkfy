@@ -6,9 +6,16 @@ carried through a linked worktree and landed on main.
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts
   names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
+  carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
+                                     check the two are byte-identical
+  land-check NOTE                    after the merge: fast-forward the primary checkout to origin's base,
+                                     only when the primary copy is clean or byte-identical to the merged
+                                     blob; otherwise refuse and print the difference
 
 --vault is the primary checkout, never inferred from the current folder. Each subcommand prints one
-JSON object on stdout; a stop also prints its reason on stderr.
+JSON object on stdout; a stop also prints its reason on stderr (a diverged land-check, the difference
+too). The primary copy is only ever read: land-check stages an identical copy so the fast-forward
+keeps it, and never stashes, resets or writes it.
 
 Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why).
 Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, note profile).
@@ -16,13 +23,17 @@ Python 3.9+: the standard library and zkfy's knowledge.py (scope policy, note pr
 from __future__ import annotations
 
 import argparse
+import difflib
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 
 def _load_knowledge():
@@ -68,6 +79,15 @@ def blob(root, rev, note):
     """The blob id of `note` at `rev`, or '' when `rev` has no such file."""
     p = git(root, "rev-parse", "--verify", "--quiet", f"{rev}:{note}", check=False)
     return p.stdout.decode().strip() if p.returncode == 0 else ""
+
+
+def file_blob(root, note):
+    """The blob id git would store for the working copy of `note` (clean filters applied)."""
+    return out(root, "hash-object", f"--path={note}", "--", str(K.safe_path(root, note)))
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
 
 
 # --- the vault and the note -----------------------------------------------------------------------
@@ -163,20 +183,138 @@ def cmd_names(root, args):
     return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}
 
 
+def linked_worktree(root, value):
+    """`value` as a linked worktree of the primary checkout `root`."""
+    try:
+        path = Path(value).expanduser().resolve(strict=True)
+        top = Path(out(path, "rev-parse", "--show-toplevel")).resolve()
+        common = Path(out(path, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+    except (OSError, GitError):
+        raise Refused(f"{value} is not a git worktree") from None
+    if top != path or path == root or common != (root / ".git").resolve():
+        raise Refused(f"{value} is not a linked worktree of {root}")
+    return path
+
+
+def cmd_carry(root, args):
+    note, _ = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    base, theirs = blob(root, "HEAD", note), blob(tree, "HEAD", note)
+    if not base:
+        raise Refused(f"{note} is not on the primary checkout's branch")
+    if base != theirs:
+        raise Refused(f"{note} differs between the primary checkout's HEAD and the worktree's HEAD "
+                      f"(it changed on the base branch since your copy's base); carrying would undo that change")
+    source = K.safe_path(root, note)
+    data = K.read_file(root, note)
+    target = K.safe_path(tree, note)
+    if target.is_file() and target.read_bytes() == data:
+        carried = False
+    else:
+        if not target.is_file() or file_blob(tree, note) != theirs:
+            raise Refused(f"the worktree's copy of {note} has edits of its own; carry never overwrites them")
+        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".note-update-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+            shutil.copymode(source, tmp)
+            os.replace(tmp, target)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+        carried = True
+    copy = target.read_bytes()
+    result = {"note": note, "worktree": str(tree), "carried": carried, "identical": copy == data,
+              "sha256": sha256(data)}
+    if copy != data:
+        raise Refused(f"the worktree's copy of {note} is not byte-identical to the primary copy", result)
+    return result
+
+
+def base_branch(root):
+    """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
+    p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
+    name = p.stdout.decode().strip()
+    if p.returncode == 0 and name.startswith("origin/"):
+        return name[len("origin/"):]
+    for line in out(root, "ls-remote", "--symref", "origin", "HEAD").splitlines():
+        m = re.match(r"ref: refs/heads/(\S+)\tHEAD$", line)
+        if m:
+            return m[1]
+    raise GitError("origin's default branch is unknown; run: git remote set-head origin --auto")
+
+
+def names_z(root, *args):
+    return {os.fsdecode(x) for x in git(root, *args).stdout.split(b"\0") if x}
+
+
+def cmd_land_check(root, args):
+    note, _ = note_of(root, args.note)
+    base = base_branch(root)
+    git(root, "fetch", "--quiet", "origin", base)
+    ref = git(root, "symbolic-ref", "--quiet", "HEAD", check=False).stdout.decode().strip()
+    if ref != f"refs/heads/{base}":
+        on = ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else "a detached HEAD"
+        raise Refused(f"the primary checkout is on {on}, not {base}")
+    head, target = out(root, "rev-parse", "HEAD"), out(root, "rev-parse", f"origin/{base}")
+    merged = blob(root, f"origin/{base}", note)
+    if not merged:
+        raise Refused(f"origin/{base} has no {note}")
+    code = tracked_change(root, note)
+    copy = file_blob(root, note)
+    result = {"note": note, "base": base, "from": head, "to": target, "dirty": bool(code),
+              "identical": copy == merged}
+    if code and copy != merged:
+        old = git(root, "cat-file", "blob", merged).stdout.decode("utf-8", "replace").splitlines(keepends=True)
+        new = K.read_file(root, note).decode("utf-8", "replace").splitlines(keepends=True)
+        diff = "".join(difflib.unified_diff(old, new, f"origin/{base}:{note}", f"{note} (primary copy)"))
+        raise Refused(f"{note} in the primary checkout differs from what merged; nothing was touched",
+                      {**result, "difference": diff})
+    if head != target and git(root, "merge-base", "--is-ancestor", head, target, check=False).returncode:
+        raise Refused(f"{base} has commits origin/{base} lacks; nothing was touched")
+    incoming = names_z(root, "diff", "--name-only", "-z", "--no-renames", head, target)
+    dirty = (names_z(root, "diff", "--name-only", "-z", "--no-renames")
+             | names_z(root, "diff", "--name-only", "-z", "--no-renames", "--cached")
+             | names_z(root, "ls-files", "-z", "--others", "--exclude-standard"))
+    clash = sorted((incoming & dirty) - {note})
+    if clash:
+        raise Refused(f"uncommitted changes in {', '.join(clash[:3])} would block the fast-forward; "
+                      f"nothing was touched", {**result, "clash": clash})
+    staged = False
+    if code and head != target:
+        # Stage the identical copy: the fast-forward then keeps it, and the file is never written.
+        git(root, "add", "--", note)
+        staged = True
+    if head != target:
+        p = git(root, "merge", "--ff-only", "--quiet", f"origin/{base}", check=False)
+        if p.returncode:
+            if staged:
+                git(root, "restore", "--staged", "--", note)
+            why = (p.stderr or p.stdout).decode(errors="replace").strip().splitlines()
+            raise GitError(f"git refused the fast-forward: {why[0] if why else p.returncode}; "
+                           f"the primary copy is as it was")
+    left = status_of(root, note)
+    return {**result, "fast_forwarded": head != target, "restored": bool(code) and not left, "status": left}
+
+
 # --- the command line ------------------------------------------------------------------------------
 
-COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names}
+COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "carry": cmd_carry,
+            "land-check": cmd_land_check}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--vault", required=True, help="the vault's primary checkout; never inferred from cwd")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve", "names"):
+    for name in ("resolve", "names", "land-check"):
         sub.add_parser(name).add_argument("note", help="the note's exact vault-relative path")
     s = sub.add_parser("state")
     s.add_argument("note")
     s.add_argument("--instruction-given", action="store_true", help="the user gave an instruction (case A)")
+    c = sub.add_parser("carry")
+    c.add_argument("note")
+    c.add_argument("worktree", help="the linked worktree the note is carried into")
     args = parser.parse_args(argv)
     try:
         root = primary(args.vault)
@@ -188,6 +326,8 @@ def main(argv=None):
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     if code:
         print(f"note_update {args.command}: {result['error']}", file=sys.stderr)
+        if result.get("difference"):
+            sys.stderr.write(result["difference"])
     return code
 
 

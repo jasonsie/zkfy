@@ -5,7 +5,8 @@ carried through a linked worktree and landed on main.
   resolve NOTE                       the eligible note NOTE names (an exact path, else a basename, else an
                                      alias) and its profile; several matches list the candidates
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
-                                     the primary checkout), C (neither); no other file's status counts.
+                                     the primary checkout), C (neither, with the note's own structural
+                                     defects to pick fixes from); no other file's status counts.
                                      Also where a stopped run stands, with no state file of its own: its
                                      worktree (git, worktree-guard's records), its owner, whether it is
                                      pushed, its PR (gh, run in the vault), and `next_step`; fetches
@@ -457,7 +458,14 @@ def worktree_step(root, tree, work, note, case, change, slug, run):
     return "diff-gate", None, None
 
 
-CASE_C_REASON = "case C (no instruction, no uncommitted edit) is not built yet: give an instruction, or edit the note first"
+CASE_C_REASON = "case C: no instruction and no uncommitted edit"
+
+
+def defects_of(root, note):
+    """The note's own structural defects, from knowledge.py's lint: the issues `.claude/QUALITY.md`
+    reports, each with its repair hint. Content length stays a judgement call, never a defect here."""
+    return [{"rule": i["rule"], "detail": i["detail"], "fix": i["fix"]}
+            for i in K.Corpus(K.Snapshot(root)).issues() if i["path"] == note]
 
 
 def start_step(case):
@@ -518,6 +526,11 @@ def cmd_state(root, args):
     if run is not None:
         run["pr"] = pr_summary(pr) if pr else None
         run.setdefault("pushed", bool(pr))
+    if case == "C":  # the note's defects become the fixes to pick from, then the run goes on as case A
+        result["defects"] = defects_of(root, note)
+        if step == "stop" and reason == CASE_C_REASON:
+            step, reason = ("fixes", None) if result["defects"] else (
+                "stop", f"{note} has no structural defects; give an instruction for what should change")
     return {**result, "run": run, "next_step": step, **({"reason": reason} if reason else {})}
 
 

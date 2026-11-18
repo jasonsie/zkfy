@@ -1,19 +1,21 @@
 ---
 name: note-update
-description: "Land an update to one vault note on main: your instruction (the agent edits after a plan gate) or your own Obsidian edit, carried through a worktree, with broken heading links repointed and one approved map line, then a diff gate, commit, ship and approve, with your copy never overwritten."
+description: "Land an update to one vault note on main: your instruction (the agent edits after a plan gate), fixes you pick from its structural defects, or your own Obsidian edit, carried through a worktree, with broken heading links repointed and one approved map line, then a diff gate, commit, ship and approve, with your copy never overwritten."
 disable-model-invocation: true
 argument-hint: "<note: path, filename or alias> [instruction] [--vault <root>]"
 ---
 
 # Note update
 
-One run lands one **target note**'s update on the vault's base branch. Built so far:
+One run lands one **target note**'s update on the vault's base branch, in one of three cases:
 
 - **case A:** you give an instruction, and the agent edits after a plan gate;
 - **case B:** you edited the note in the primary checkout (Obsidian) and give no instruction, and the
-  run carries your edit.
+  run carries your edit;
+- **case C:** neither: the run lists the note's structural defects, you pick fixes (or type your own),
+  and it goes on as case A.
 
-Case C (neither) stops at step 3. Either way, inbound links to a heading the update renamed or removed are
+In every case, inbound links to a heading the update renamed or removed are
 repointed in the same PR, and one map line changes only when the user approves it. No other note gains
 a link.
 
@@ -65,6 +67,7 @@ gives `<B>` (`branch`), `<W>` (`worktree`) and `<n>` (`pr.number`). Go on at `ne
 
 | `next_step` | Go to |
 |---|---|
+| `fixes` | step 3a |
 | `plan-gate` | step 4; with `<W>` already there, step 5 skips `worktree new` |
 | `worktree` | step 5 |
 | `carry` | step 5's carry, with `<W>` from `run` |
@@ -75,10 +78,22 @@ gives `<B>` (`branch`), `<W>` (`worktree`) and `<n>` (`pr.number`). Go on at `ne
 | `land-check` | step 9's land check |
 | `done` | step 10: the run already landed |
 | `owned` | stop with `reason`: another live session owns the worktree; never take it over |
-| `stop` | stop with `reason` (case C, or a base that can no longer be checked) |
+| `stop` | stop with `reason`; for a case-C note with no defects, ask for an instruction first (step 3a) |
 
 A gate the run already passed is not asked again. The plan gate is the exception: the approved plan is
 not recorded, so a run resumed before its edit shows the gate again.
+
+### 3a. Pick fixes (case C)
+
+`defects` lists the note's own structural defects, each with its `rule`, `detail` and `fix`. Ask which to
+make: in a dialog, `multiSelect`, one option per defect (its `fix` in plain words), naming any beyond
+four in the question; the dialog's own free-text answer is the user's instruction instead. Without a
+dialog, print a numbered list and wait for numbers, the user's own words, or "stop".
+
+With no defects, say so and ask what should change instead.
+
+The picked fixes, or the user's words, are the instruction from here on: go on as case A at step 4,
+whose plan gate shows them. An answer that picks nothing and gives no instruction stops the run.
 
 ### 4. Plan gate (case A)
 

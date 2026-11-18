@@ -53,6 +53,8 @@ FILES = {
     THEMES_NOTE: THEMES,
     MANY: MANY_LINKS,
     TOOLS_MAP: "---\nType: structure\n---\n- [[Tools-Thesis-Themes#Short Theme]] themes\n",
+    "111.cs/CS-Defective.md": "---\nType: literature\nCategories: [CS]\n---\n### Abstract\nNo date, no links.\n",
+    "555.tools/Tools-Also-Defective.md": "---\nDate: 2026-11-01\nType: literature\n---\n### Abstract\nA.\n### Links\n",
     "111.cs/CS-Links-In.md": page(body="See [[Tools-Agent-Trust-Pyramid#Abstract]] and [[Tools-Agent-Trust-Pyramid]]."),
     "raw/Source.md": "a source\n",
     "docs/workflows/vault-authoring.md": "rules\n",
@@ -270,7 +272,7 @@ class NoteUpdateTest(unittest.TestCase):
         self.drop_tree()
         self.prs()
         self.assertEqual(self.step("--instruction-given")[0], "plan-gate")
-        self.assertEqual(self.step()[0], "stop")  # case C is not built yet
+        self.assertEqual(self.step()[0], "fixes")  # case C: the note's own defects
         self.put(self.vault, NOTE, page("thesis", "My edit."))
         self.assertEqual(self.step()[0], "worktree")
 
@@ -353,6 +355,21 @@ class NoteUpdateTest(unittest.TestCase):
         step, result = self.step()
         self.assertNotEqual(step, "owned")
         self.assertTrue(result["run"]["owner"]["shared"])
+
+    def test_state_lists_only_this_notes_defects_in_case_c(self):
+        self.prs()
+        result = self.ok("state", "111.cs/CS-Defective.md")
+        self.assertEqual((result["case"], result["next_step"]), ("C", "fixes"))
+        self.assertEqual({(d["rule"], d["detail"]) for d in result["defects"]},
+                         {("field", "Date"), ("heading", "Links")})
+        self.assertTrue(all(d["fix"] for d in result["defects"]))
+        self.assertNotIn("defects", self.ok("state", "111.cs/CS-Defective.md", "--instruction-given"))
+
+    def test_state_says_a_note_without_defects_needs_an_instruction(self):
+        self.prs()
+        result = self.ok("state", "111.cs/CS-Old-Note.md")
+        self.assertEqual((result["case"], result["defects"], result["next_step"]), ("C", [], "stop"))
+        self.assertIn("no structural defects", result["reason"])
 
     # --- names ---
 

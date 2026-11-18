@@ -132,7 +132,8 @@ Otherwise fix `<W>/<N>` and rerun it.
 the update broke, and the commit would be refused with it.
 
 - **Heading:** decide each `new` heading's fate: renamed → its new heading; removed → the nearest
-  heading that stays, or `""` for the note itself. Then `NU repoint "<N>" "<W>" --rename "<OLD>"
+  heading that stays, or `""` for the note itself. `repoint` also fixes the note's own links; one it
+  lists as `left` (the note's own link to a removed heading) gets another heading by an edit of `<N>`. Then `NU repoint "<N>" "<W>" --rename "<OLD>"
   "<NEW>"` (repeat `--rename` per heading) and rerun `NU links`. Done when no `new` entry is left.
 - **Block or frontmatter:** stop; those are not repointed here.
 
@@ -148,7 +149,7 @@ Show, in one gate:
 - **Sections** (case A): the `edit-check` sections that are not `same`, and its `budget.warnings`.
 - **Links:** `repoint`'s count and files, and the map line's old and new text.
 - **Other files touched:** every line of `git -C "<W>" status --porcelain` that is not `<N>`. They
-  must be exactly `repoint`'s `files` plus the approved map.
+  must be exactly `repoint`'s `files` other than `<N>`, plus the approved map.
 - **Commits:** `NU commits "<N>" "<W>"`, adding `--sha256 <carry's sha256>` in case A on a dirty note. When `split` is true, the change lands
   as two commits: first the heading renames with the repointed links, as
   `docs(links): repoint <n> links to <note stem>'s renamed headings`, then the rest.

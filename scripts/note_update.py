@@ -20,8 +20,9 @@ carried through a linked worktree and landed on main.
   links NOTE WORKTREE                the inbound links the update breaks, from the ratchet's own issues;
                                      `new` marks one the worktree's HEAD does not break
   repoint NOTE WORKTREE --rename OLD NEW ...
-                                     rewrite the anchor of each broken link to heading OLD as NEW (an
-                                     empty NEW links the note itself); no link is added or retargeted
+                                     rewrite the anchor of each broken link to heading OLD as NEW, the
+                                     note's own links included (an empty NEW links the note itself,
+                                     except from the note); no link is added or retargeted
   map-line NOTE WORKTREE --map M --line L --text T
                                      replace line L of map M, which links NOTE, with T: one line, no new link
   commits NOTE WORKTREE [--sha256 S] the edit's changed lines (note, links, map) and whether they pass
@@ -353,10 +354,11 @@ def cmd_names(root, args):
     return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}
 
 
-def inbound_sites(corpus, note):
-    """Each link in another eligible note that resolves to `note`: (from, (line, target, text), status)."""
+def inbound_sites(corpus, note, own=False):
+    """Each link in another eligible note (and, with `own`, in `note` itself) that resolves to `note`:
+    (from, (line, target, text), status)."""
     for path, other in sorted(corpus.notes.items()):
-        if path == note:
+        if path == note and not own:
             continue
         for site in other.sites:
             status, hits = corpus.resolve(site[1], path)
@@ -524,11 +526,15 @@ def retarget(text, renames):
         escape = "\\" if target.endswith("\\") else ""  # a table cell's escaped pipe
         base, hashmark, anchor = target[:len(target) - len(escape)].partition("#")
         new = renames.get(K.anchor_slug(anchor)) if hashmark else None
-        return None if new is None else text[:start] + base + (f"#{new}" if new else "") + escape + bar + alias + "]]"
+        if new is None or not (base or new):  # the note's own `[[#Old]]` needs a heading to point at
+            return None
+        return text[:start] + base + (f"#{new}" if new else "") + escape + bar + alias + "]]"
     start = text.rindex("(") + 1
     base, hashmark, anchor = text[start:-1].partition("#")
     new = renames.get(K.anchor_slug(unquote(anchor))) if hashmark else None
-    return None if new is None else text[:start] + base + (f"#{quote(new)}" if new else "") + ")"
+    if new is None or not (base or new):
+        return None
+    return text[:start] + base + (f"#{quote(new)}" if new else "") + ")"
 
 
 def cmd_repoint(root, args):
@@ -541,7 +547,7 @@ def cmd_repoint(root, args):
             raise Refused(f"{new!r} is not a heading of {note} in the worktree")
     renames = {K.anchor_slug(old): new for old, new in args.rename}
     edits, left = defaultdict(list), []
-    for path, (line, link, text), status in inbound_sites(corpus, note):
+    for path, (line, link, text), status in inbound_sites(corpus, note, own=True):
         new_text = retarget(text, renames) if status == "anchor" else None
         if new_text is not None:
             edits[path].append((line, text, new_text))
@@ -644,7 +650,13 @@ def cmd_stage_renames(root, args):
     renames = {K.anchor_slug(old): new for old, new in args.rename if new}
     raw = head.decode("utf-8").splitlines(keepends=True)
     renamed = []
-    for number, heading in K.Note.parse(note, head, scope).headings:
+    base = K.Note.parse(note, head, scope)
+    corpus = K.Corpus(K.Snapshot(tree))
+    for number, link, text in base.sites:  # the note's own links to a renamed heading follow it
+        new_text = retarget(text, renames) if corpus.resolve(link, note)[1] == [note] else None
+        if new_text is not None:
+            raw[number - 1] = raw[number - 1].replace(text, new_text, 1)
+    for number, heading in base.headings:
         new = renames.get(K.anchor_slug(heading))
         if new:
             line = raw[number - 1]

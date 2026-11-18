@@ -118,7 +118,8 @@ own, since the worktree guard reads the command line:
 ai-dotfiles worktree new <B> --repo "<V>"
 ```
 
-`<W>` is the path it prints. `names` dates the branch when origin already has it. When `dirty`, run
+`<W>` is the path it prints, on a detached HEAD that stays detached: `ship` pushes it as `<B>`.
+`names` dates the branch when origin already has it. When `dirty`, run
 `NU carry "<N>" "<W>"`. Done when it returns
 `identical: true`; keep its `sha256`.
 
@@ -187,6 +188,9 @@ Show, in one gate:
   Scope: <N>
   Verified: structural lint, <k> issues on <N>, none new; ratchet hook and catalog check at commit and ship
   ```
+
+  The trailers, with any co-author line the CLI adds, form the message's last paragraph: the
+  small-commits hook reads only that one.
 
 In case B with a proposed map line, the options are those of the plan gate. Stop → end the run.
 `<V>` is untouched; `<W>` keeps the edit. Say so, and that

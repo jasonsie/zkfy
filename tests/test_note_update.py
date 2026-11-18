@@ -21,6 +21,14 @@ def page(mode=None, body="Body.", aliases="[]"):
             f"### Abstract\n{body}\n### Links\n")
 
 
+LONG_ATOM = ("---\nDate: 2026-11-01\nType: literature\nMode: atom\nCategories: [CS]\nAliases: []\n---\n"
+             "### Definition\n" + "word " * 505 + "\n```python\n" + "code " * 50 + "\n```\n"
+             "### Mental Model\n" + "diagram " * 100 + "\n### Links\n- [[CS-Harness]]\n")
+THEMES = ("---\nDate: 2026-11-01\nType: literature\nMode: thesis\nCategories: [Tools]\nAliases: []\n"
+          "Src: 'https://example.com/talk'\n---\n### 執行摘要\nSummary.\n### Mental Model\nModel.\n"
+          "### Short Theme\n" + "word " * 150 + "\n### Right Theme\n" + "字" * 300 + "\n### Links\n")
+
+
 FILES = {
     "docs/knowledge/scope.json": json.dumps(SCOPE),
     NOTE: page("thesis", "信任金字塔 trust pyramid.", aliases="[Agent Trust Pyramid, 代理信任金字塔]"),
@@ -32,6 +40,9 @@ FILES = {
     "555.tools/Tools-Clip-Page.md": page("clip", "Verbatim."),
     MAP: "---\nType: structure\n---\n[[Tools-Agent-Trust-Pyramid]]\n",
     "111.cs/筆記.md": page("atom"),
+    "111.cs/CS-Long-Atom.md": LONG_ATOM,
+    "555.tools/Tools-Thesis-Themes.md": THEMES,
+    "111.cs/CS-Links-In.md": page(body="See [[Tools-Agent-Trust-Pyramid#Abstract]] and [[Tools-Agent-Trust-Pyramid]]."),
     "raw/Source.md": "a source\n",
     "docs/workflows/vault-authoring.md": "rules\n",
     "template/Template-Note.md": page(),
@@ -188,6 +199,16 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual((state["case"], state["dirty"], state["status"]), ("B", True, " M"))
         self.assertEqual(self.ok("state", NOTE, "--instruction-given")["case"], "A")
 
+    def test_state_gives_case_a_for_an_instruction_clean_or_dirty(self):
+        clean = self.ok("state", NOTE, "--instruction-given")
+        self.assertEqual((clean["case"], clean["dirty"]), ("A", False))
+        self.put(self.vault, NOTE, page("thesis", "My edit first."))
+        dirty = self.ok("state", NOTE, "--instruction-given")
+        self.assertEqual((dirty["case"], dirty["dirty"]), ("A", True))
+        carried = self.ok("carry", NOTE, str(self.tree))  # the hand edit becomes the agent's base
+        self.assertTrue(carried["identical"])
+        self.assertIn("My edit first.", (self.tree / NOTE).read_text(encoding="utf-8"))
+
     def test_state_refuses_an_untracked_note(self):
         self.put(self.vault, "555.tools/Tools-New.md", page())
         self.refused("state", "555.tools/Tools-New.md", why="not tracked")
@@ -200,6 +221,29 @@ class NoteUpdateTest(unittest.TestCase):
         names = self.ok("names", MAP)
         self.assertEqual((names["branch"], names["scope"]), ("docs/update-cs-map", "index"))
         self.refused("names", "111.cs/筆記.md", why="no ASCII branch name")
+
+    # --- plan ---
+
+    def test_plan_counts_an_atom_body_without_code_or_mental_model(self):
+        budget = self.ok("plan", "111.cs/CS-Long-Atom.md")["budget"]
+        self.assertEqual((budget["rule"], budget["count"], budget["limit"]), ("atom", 505, 500))
+        self.assertEqual(len(budget["warnings"]), 1)
+
+    def test_plan_counts_each_thesis_theme(self):
+        budget = self.ok("plan", "555.tools/Tools-Thesis-Themes.md")["budget"]
+        self.assertEqual(budget["themes"], [{"heading": "Short Theme", "count": 150},
+                                            {"heading": "Right Theme", "count": 300}])
+        self.assertEqual(len(budget["warnings"]), 1)
+        self.assertIn("Short Theme", budget["warnings"][0])
+        self.assertEqual(self.ok("plan", "111.cs/CS-Old-Note.md")["budget"], {"rule": None, "warnings": []})
+
+    def test_plan_lists_the_inbound_links_and_the_headings_they_target(self):
+        plan = self.ok("plan", NOTE)
+        self.assertEqual((plan["note"], plan["profile"]), (NOTE, "thesis"))
+        self.assertEqual(plan["inbound"], [
+            {"from": MAP, "map": True, "heading": None, "broken": False},
+            {"from": "111.cs/CS-Links-In.md", "map": False, "heading": None, "broken": False},
+            {"from": "111.cs/CS-Links-In.md", "map": False, "heading": "Abstract", "broken": False}])
 
     # --- carry ---
 
@@ -283,7 +327,6 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(result["clash"], ["111.cs/CS-Harness.md"])
         self.assertEqual(self.snapshot(), before)
 
-
     def test_a_refused_fast_forward_puts_back_the_index_it_found(self):
         mine = page("thesis", "My edit.")
         self.put(self.vault, NOTE, page("thesis", "My staged draft."))
@@ -301,6 +344,7 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertIn("git refused the fast-forward", result["error"])
         self.assertEqual(self.git(self.vault, "ls-files", "--stage", "--", NOTE), index)
         self.assertEqual(self.snapshot(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

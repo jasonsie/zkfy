@@ -7,6 +7,8 @@ carried through a linked worktree and landed on main.
   state NOTE [--instruction-given]   the case: A (an instruction), B (the note has uncommitted edits in
                                      the primary checkout), C (neither); no other file's status counts
   names NOTE                         the branch docs/update-<stem-kebab>, the commit scope, a subject stub
+  plan NOTE                          what the plan gate shows: the profile, size-budget warnings and the
+                                     inbound links (from notes and maps, with the heading each targets)
   carry NOTE WORKTREE                copy the primary copy into a linked worktree at the same path and
                                      check the two are byte-identical
   land-check NOTE                    after the merge: fast-forward the primary checkout to origin's base,
@@ -36,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import unquote
 
 
 def _load_knowledge():
@@ -189,6 +192,55 @@ def tracked_change(root, note):
     return status
 
 
+def profile_of(scope, note):
+    return "map" if scope.is_map(note.path) else str(note.meta.get("Mode", "legacy"))
+
+
+def sections(note):
+    """The body split at headings of level 1-3, fence-aware: [(title, [(number, line)])], heading line
+    first; the text before the first heading is "(preamble)" and is left out when blank."""
+    raw = dict(note.lines)
+    titles = {n: h for n, h in note.headings if re.match(r"#{1,3}\s", raw.get(n, ""))}
+    found, title, lines = [], "(preamble)", []
+    for number, line in note.lines:
+        if number in titles:
+            found.append((title, lines))
+            title, lines = titles[number], []
+        lines.append((number, line))
+    found.append((title, lines))
+    return [(t, ls) for t, ls in found if t != "(preamble)" or any(x.strip() for _, x in ls)]
+
+
+CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+WORD = re.compile(r"[A-Za-z0-9]+(?:['\u2019][A-Za-z]+)?")
+
+
+def size(lines):
+    """Chinese characters plus English words, CLAUDE.md's count: fenced code, embeds and URLs left out."""
+    text = "\n".join(line for _, line in K.prose_lines(lines))
+    text = re.sub(r"!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)|\]\([^)]*\)|https?://\S+", " ", text)
+    text = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", text)
+    return len(CJK.findall(text)) + len(WORD.findall(CJK.sub(" ", text)))
+
+
+def budget(note, scope):
+    """The body budget of the note's profile (CLAUDE.md, ADR-0002 D5): warnings only, never a stop."""
+    parts = [(title, lines[1:] if title != "(preamble)" else lines) for title, lines in sections(note)]
+    profile = profile_of(scope, note)
+    if profile == "atom":
+        count = sum(size(lines) for title, lines in parts if title.casefold() not in ("mental model", "links"))
+        return {"rule": "atom", "count": count, "limit": 500,
+                "warnings": [f"atom body: {count} over the 500 ceiling"] if count > 500 else []}
+    if profile == "thesis":
+        skip = {s.casefold() for s in scope.config.get("thesis_summaries", ["執行摘要"])}
+        skip |= {"(preamble)", "mental model", "links", "附錄", "appendix"}
+        themes = [{"heading": title, "count": size(lines)} for title, lines in parts if title.casefold() not in skip]
+        return {"rule": "thesis", "themes": themes, "range": [200, 1500],
+                "warnings": [f"theme {t['heading']!r}: {t['count']}, outside 200-1500" for t in themes
+                             if not 200 <= t["count"] <= 1500]}
+    return {"rule": None, "warnings": []}
+
+
 # --- subcommands -----------------------------------------------------------------------------------
 
 def name_key(text):
@@ -201,8 +253,7 @@ def cmd_resolve(root, args):
     value = args.note.strip()
 
     def match(path, how):
-        profile = "map" if corpus.scope.is_map(path) else str(corpus.notes[path].meta.get("Mode", "legacy"))
-        return {"note": path, "profile": profile, "matched_by": how}
+        return {"note": path, "profile": profile_of(corpus.scope, corpus.notes[path]), "matched_by": how}
 
     def no_match():
         hits = K.search(corpus, value, 5)
@@ -249,6 +300,23 @@ def cmd_names(root, args):
     top = parts[0] if len(parts) > 1 else ""
     scope = re.sub(r"[^a-z0-9]+", "-", re.sub(r"^\d+\.", "", top).lower()).strip("-") or "vault"
     return {"note": note, "branch": branch, "scope": scope, "subject_stub": f"docs({scope}): "}
+
+
+def cmd_plan(root, args):
+    note, _ = note_of(root, args.note)
+    corpus = K.Corpus(K.Snapshot(root))  # the link graph the ratchet hook validates
+    inbound = []
+    for path, other in sorted(corpus.notes.items()):
+        if path == note:
+            continue
+        for link in sorted(set(other.links)):
+            status, hits = corpus.resolve(link, path)
+            if hits == [note] and status in ("ok", "anchor"):
+                inbound.append({"from": path, "map": corpus.scope.is_map(path),
+                                "heading": unquote(link).partition("#")[2] or None, "broken": status == "anchor"})
+    target = corpus.notes[note]
+    return {"note": note, "profile": profile_of(corpus.scope, target), "budget": budget(target, corpus.scope),
+            "inbound": inbound}
 
 
 def linked_worktree(root, value):
@@ -367,15 +435,15 @@ def cmd_land_check(root, args):
 
 # --- the command line ------------------------------------------------------------------------------
 
-COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "carry": cmd_carry,
-            "land-check": cmd_land_check}
+COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
+            "carry": cmd_carry, "land-check": cmd_land_check}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--vault", required=True, help="the vault's primary checkout; never inferred from cwd")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve", "names", "land-check"):
+    for name in ("resolve", "names", "plan", "land-check"):
         sub.add_parser(name).add_argument("note", help="the note's exact vault-relative path")
     s = sub.add_parser("state")
     s.add_argument("note")

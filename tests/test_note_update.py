@@ -375,6 +375,43 @@ class NoteUpdateTest(unittest.TestCase):
         self.assertEqual(self.git(self.vault, "ls-files", "--stage", "--", NOTE), index)
         self.assertEqual(self.snapshot(), before)
 
+    # --- case A on a dirty note: the hand edit lands as its own commit, the agent's on top ---
+
+    def land_two_commits(self, mine, agent):
+        self.put(self.vault, NOTE, mine)
+        sha = self.ok("carry", NOTE, str(self.tree))["sha256"]
+        self.put(self.tree, NOTE, agent)
+        staged = self.ok("stage-carried", NOTE, str(self.tree), "--sha256", sha)
+        self.assertEqual(self.git(self.tree, "show", f":{NOTE}"), mine.rstrip("\n"))
+        self.assertEqual(self.git(self.tree, "rev-parse", f":{NOTE}"), staged["staged"])
+        self.assertEqual((self.tree / NOTE).read_text(encoding="utf-8"), agent)
+        self.git(self.tree, "commit", "-qm", "docs(tools): the hand edit")
+        self.git(self.tree, "commit", "-qam", "docs(tools): the agent's edit")
+        self.git(self.tree, "push", "-q", "origin", "HEAD:main")
+
+    def test_land_check_updates_a_copy_that_merged_under_a_later_commit(self):
+        mine, agent = page("thesis", "My typo fix."), page("thesis", "My typo fix. Then the split.")
+        self.land_two_commits(mine, agent)
+        result = self.ok("land-check", NOTE)
+        self.assertEqual((result["superseded"], result["fast_forwarded"], result["restored"]), (True, True, True))
+        self.assertEqual((self.vault / NOTE).read_text(encoding="utf-8"), agent)
+        self.assertEqual(self.git(self.vault, "status", "--porcelain"), "")
+        self.assertEqual(self.git(self.vault, "rev-parse", "HEAD"), self.git(self.vault, "rev-parse", "origin/main"))
+
+    def test_land_check_still_refuses_a_copy_edited_again_after_the_carry(self):
+        self.land_two_commits(page("thesis", "My typo fix."), page("thesis", "My typo fix. Then the split."))
+        self.put(self.vault, NOTE, page("thesis", "My typo fix, and more typing."))
+        before = self.snapshot()
+        self.refused("land-check", NOTE, why="differs from what merged")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_stage_carried_refuses_a_copy_changed_since_the_carry(self):
+        self.put(self.vault, NOTE, page("thesis", "My edit."))
+        sha = self.ok("carry", NOTE, str(self.tree))["sha256"]
+        self.put(self.vault, NOTE, page("thesis", "My edit, typed on."))
+        self.refused("stage-carried", NOTE, str(self.tree), "--sha256", sha, why="changed since the carry")
+        self.assertEqual(self.git(self.tree, "diff", "--cached", "--name-only"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

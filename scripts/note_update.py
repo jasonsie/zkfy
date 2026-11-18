@@ -14,14 +14,20 @@ carried through a linked worktree and landed on main.
   edit-check NOTE WORKTREE           the worktree's copy against the primary copy: each section same,
                                      changed, added or removed; frontmatter keys; Src and Link; a clip
                                      body; the budget after. Facts only: `problems` lists rule breaks
+  stage-carried NOTE WORKTREE --sha256 S
+                                     stage the primary copy, as carried (sha256 S), as the worktree's
+                                     index entry, so the hand edit commits before the agent's edit
   land-check NOTE                    after the merge: fast-forward the primary checkout to origin's base,
-                                     only when the primary copy is clean or byte-identical to the merged
-                                     blob; otherwise refuse and print the difference
+                                     only when the primary copy is clean, byte-identical to the merged
+                                     blob, or byte-identical to the note at a commit the merge brought
+                                     (then it is updated to the merged blob); otherwise refuse and print
+                                     the difference
 
 --vault is the primary checkout, never inferred from the current folder. Each subcommand prints one
 JSON object on stdout; a stop also prints its reason on stderr (a diverged land-check, the difference
-too). The primary copy is only ever read: land-check stages an identical copy so the fast-forward
-keeps it, and never stashes, resets or writes it. edit-check's base is the primary copy as it is now.
+too). The primary copy is read, never stashed or reset: land-check stages the merged blob so the
+fast-forward keeps the file, and writes the file once, only to bring a superseded copy to the merged
+blob, after checking it is still what merged. edit-check's base is the primary copy as it is now.
 
 Exit codes: 0 ok · 1 usage, git or environment · 2 refused, nothing changed ("error" says why) ·
 3 resolve found several notes ("candidates"; pick one by its path).
@@ -420,6 +426,19 @@ def cmd_edit_check(root, args):
             "budget": budget(new, scope), "problems": problems}
 
 
+def cmd_stage_carried(root, args):
+    note, _ = note_of(root, args.note)
+    tree = linked_worktree(root, args.worktree)
+    data = K.read_file(root, note)
+    if sha256(data) != args.sha256:
+        raise Refused(f"{note} in the primary checkout changed since the carry; carry it again and redo the "
+                      f"edit on top", {"sha256": sha256(data)})
+    oid = out(root, "hash-object", "-w", f"--path={note}", "--", str(K.safe_path(root, note)))
+    entry = git(tree, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
+    git(tree, "update-index", "--cacheinfo", entry[0] if entry else "100644", oid, note)
+    return {"note": note, "worktree": str(tree), "staged": oid, "sha256": args.sha256}
+
+
 def base_branch(root):
     """Origin's default branch, as `origin/HEAD` names it (or origin itself says)."""
     p = git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
@@ -451,9 +470,13 @@ def cmd_land_check(root, args):
         raise Refused(f"origin/{base} has no {note}")
     change = tracked_change(root, note)
     copy = file_blob(root, note)
+    # A copy that matches the note at a commit the merge brought landed too, under later commits (the
+    # hand edit's own commit in a case-A run on a dirty note): it is brought to the merged blob.
+    landed = {blob(root, c, note) for c in out(root, "log", "--format=%H", f"{head}..{tip}", "--", note).split()}
+    superseded = bool(change) and copy != merged and copy in landed
     result = {"note": note, "base": base, "from": head, "to": tip, "dirty": bool(change),
-              "identical": copy == merged}
-    if change and copy != merged:
+              "identical": copy == merged, "superseded": superseded}
+    if change and copy != merged and not superseded:
         old = git(root, "cat-file", "blob", merged).stdout.decode("utf-8", "replace").splitlines(keepends=True)
         new = K.read_file(root, note).decode("utf-8", "replace").splitlines(keepends=True)
         diff = "".join(difflib.unified_diff(old, new, f"origin/{base}:{note}", f"{note} (primary copy)"))
@@ -471,9 +494,10 @@ def cmd_land_check(root, args):
                       f"nothing was touched", {**result, "clash": clash})
     entry = None
     if change and head != tip:
-        # Stage the identical copy: the fast-forward then keeps it, and the file is never written.
+        # Stage the merged blob: the fast-forward then keeps the file as it is instead of refusing.
         entry = git(root, "ls-files", "--stage", "-z", "--", note).stdout.split(b"\t", 1)[0].decode().split()
-        git(root, "add", "--", note)
+        mode = out(root, "ls-tree", tip, "--", note).split()[0]
+        git(root, "update-index", "--cacheinfo", mode, merged, note)
     if head != tip:
         p = git(root, "merge", "--ff-only", "--quiet", f"origin/{base}", check=False)
         if p.returncode:
@@ -482,6 +506,20 @@ def cmd_land_check(root, args):
             why = (p.stderr or p.stdout).decode(errors="replace").strip().splitlines()
             raise GitError(f"git refused the fast-forward: {why[0] if why else p.returncode}; "
                            f"the primary copy is as it was")
+    if superseded:
+        path = K.safe_path(root, note)
+        if file_blob(root, note) != copy:
+            raise Refused(f"{note} changed during the land check; {base} is at the merge and your copy is "
+                          f"left as it is", {**result, "fast_forwarded": head != tip})
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".note-update-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(git(root, "cat-file", "--filters", f"{tip}:{note}").stdout)
+            shutil.copymode(path, tmp)
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
     left = status_of(root, note)
     return {**result, "fast_forwarded": head != tip, "restored": bool(change) and not left, "status": left}
 
@@ -489,7 +527,7 @@ def cmd_land_check(root, args):
 # --- the command line ------------------------------------------------------------------------------
 
 COMMANDS = {"resolve": cmd_resolve, "state": cmd_state, "names": cmd_names, "plan": cmd_plan,
-            "carry": cmd_carry, "edit-check": cmd_edit_check,
+            "carry": cmd_carry, "edit-check": cmd_edit_check, "stage-carried": cmd_stage_carried,
             "land-check": cmd_land_check}
 
 
@@ -508,6 +546,10 @@ def main(argv=None):
     e = sub.add_parser("edit-check")
     e.add_argument("note")
     e.add_argument("worktree", help="the linked worktree holding the edited copy")
+    g = sub.add_parser("stage-carried")
+    g.add_argument("note")
+    g.add_argument("worktree")
+    g.add_argument("--sha256", required=True, help="the sha256 carry reported")
     args = parser.parse_args(argv)
     try:
         root = primary(args.vault)

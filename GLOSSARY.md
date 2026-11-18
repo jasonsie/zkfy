@@ -87,6 +87,10 @@ _Avoid_: import, move, promote
 The one eligible note a note-update run lands a change to.
 _Avoid_: the file, the page
 
+**Plan gate**:
+The approval before anything is written for an instruction: the target note, its profile, the change section by section, budget warnings and the inbound links it affects.
+_Avoid_: preview, proposal
+
 **Diff gate**:
 The approval after the change sits in its own worktree: the note's diff, other files touched, the structural lint and the commit message; "approve" there runs the git flow to the end.
 _Avoid_: review step, confirmation
@@ -96,5 +100,5 @@ To copy the user's uncommitted edit of the target note from the primary checkout
 _Avoid_: move, sync, apply
 
 **Land check**:
-The last step after the merge: the primary checkout is fast-forwarded only when its copy of the target note is clean or byte-identical to what merged; a copy edited again is refused with the difference and left alone.
+The last step after the merge: the primary checkout is fast-forwarded only when its copy of the target note is clean, byte-identical to what merged, or byte-identical to a version the merge brought, which a later commit in it superseded (that copy is then brought to the merged version); a copy edited again is refused with the difference and left alone.
 _Avoid_: pull, cleanup, sync

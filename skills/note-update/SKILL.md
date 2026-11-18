@@ -22,9 +22,10 @@ Case C (neither) stops at step 3.
   Exit 0 is done, 1 is an error, 2 is a refusal, 3 is resolve's several matches; `error` says why.
 - `KNOW` = `python3 -B <zkfy-root>/scripts/knowledge.py`, always with an explicit `--vault`.
 
-The primary checkout `<V>` is read-only for the whole run. Every edit and commit happens in the
-worktree `<W>`, named by its path in every command (`git -C "<W>" …`, `cd "<W>" && …`), because
-ship deletes it at the end. The session stays where it started.
+Every edit and commit happens in the worktree `<W>`, named by its path in every command
+(`git -C "<W>" …`, `cd "<W>" && …`), because ship deletes it at the end. The session stays where it
+started. The run never edits the primary checkout `<V>`: only the land check writes there, at the
+end, and only as step 8 says.
 
 **Gate.** In a CLI with a question dialog (AskUserQuestion), ask with Approve (Recommended) and
 Stop. Without one, print the gate and wait: only the reply "approve" passes.
@@ -107,10 +108,11 @@ writes in the session's worktree. Follow the plan, and these rules:
   in `<zkfy-root>/agents/obsidian-formatter-agent.md` (step 4a atom, 4b thesis).
 - Touch only the sections the plan names. Every other section stays byte-identical.
 - Keep every frontmatter key in its order, plus the filename, `Src` and `Link`. Strip nothing and
-  backfill nothing.
+  backfill nothing; a planned conversion sets `Mode` and nothing else.
 - Section headings are 2–4 words, and the vault's authoring rules apply.
 
-Then `NU edit-check "<N>" "<W>"`. Done when:
+Then `NU edit-check "<N>" "<W>"`, adding `--sha256 <carry's sha256>` when step 5 carried. Done
+when:
 
 - its `problems` is empty, apart from a `profile` change the plan made;
 - every section it marks changed, added or removed is one the plan named.
@@ -157,8 +159,8 @@ Stop → end the run. `<V>` is untouched; `<W>` keeps the edit. Say so, and that
      `git -C "<W>" commit -F <user's message>`, then `git -C "<W>" add -- "<N>"` and
      `git -C "<W>" commit -F <agent's message>`.
    - **Otherwise:** `git -C "<W>" add -- "<N>"`, then `git -C "<W>" commit -F <file>`.
-3. Write the PR body per the `pr` skill to a file outside the vault. The title is the last commit's
-   subject. Run `cd "<W>" && ai-dotfiles ship --dry-run --title "<subject>" --body-file <body>`,
+3. Write the PR body per the `pr` skill to a file outside the vault. The title is the note
+   commit's subject; in case A on a dirty note, the agent's. Run `cd "<W>" && ai-dotfiles ship --dry-run --title "<subject>" --body-file <body>`,
    then the same without `--dry-run`. Ship runs the vault's Verify check. `<n>` is the PR number on
    its `pr` line.
 4. `cd "<V>" && ai-dotfiles approve <n>`. Its `main` line normally reads `skipped: uncommitted

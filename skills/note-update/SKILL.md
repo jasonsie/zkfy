@@ -52,6 +52,9 @@ the current folder. Done when `<V>/docs/knowledge/scope.json` exists.
 absolute inside `<V>`), a filename without its folder, or an alias. `<N>` is the `note` it returns.
 Report its `profile` and `matched_by`.
 
+No note in the arguments: ask the user which note, and resolve their answer. The target is always the
+user's choice, never read off the vault's uncommitted files.
+
 - **Exit 3, several notes match:** ask which one. In a dialog, the `candidates` are the options,
   each with its path and profile; a dialog holds four, so name any others in the question. Without a
   dialog, print a numbered list and wait for a number. `<N>` is the one picked. An answer naming none

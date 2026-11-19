@@ -104,14 +104,14 @@ claude plugin marketplace add jasonsie/web-clipper
 /plugin install zkfy --marketplace jasonsie/zkfy
 
 # Codex
-codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.9.0
+codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.9.1
 codex plugin add zkfy@zkfy-marketplace
 
 # Pi
-pi install git:github.com/jasonsie/zkfy@zkfy--v1.9.0
+pi install git:github.com/jasonsie/zkfy@zkfy--v1.9.1
 
 # Antigravity
-agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.9.0
+agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.9.1
 ```
 
 Without ai-dotfiles, put the plugin's `bin/vault-knowledge` on your PATH yourself; Claude Code

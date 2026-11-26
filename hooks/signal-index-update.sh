@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # PostToolUse: after a note is written in a zkfied vault, remind the agent to keep the generated
 # catalog current. A configured vault (docs/knowledge/scope.json above the note) decides through
-# scripts/knowledge-hook.py; elsewhere a vault is a folder with a .claude/ sibling, found by
-# walking up from the file. Nothing is written here.
+# scripts/knowledge-hook.py; elsewhere a vault is a folder holding a built catalog
+# (.claude/index.md or .claude/index/manifest.json), found by walking up from the file; a bare
+# .claude/ does not make one. Nothing is written here.
 #
 # Two input shapes on stdin, told apart by the toolCall key:
 #   Claude Code, Codex and Pi's extension (extensions/zkfy.ts): {tool_input: {file_path}}.
@@ -49,17 +50,19 @@ else
   fi
 fi
 
-# Walk up the directory tree looking for a .claude/ sibling: a zkfied vault, without any hardcoded path
+# Walk up the directory tree looking for a built catalog: a zkfied vault, without any hardcoded
+# path. A bare .claude/ is no vault: every repo, and the home folder, holds one for settings.
+has_catalog() { [[ -f "$1/.claude/index.md" || -f "$1/.claude/index/manifest.json" ]]; }
 SEARCH_DIR=$(dirname "$FILE_PATH")
 VAULT_ROOT=""
 while [[ "$SEARCH_DIR" != "/" && "$SEARCH_DIR" != "." ]]; do
-  if [[ -d "$SEARCH_DIR/.claude" ]]; then
+  if has_catalog "$SEARCH_DIR"; then
     VAULT_ROOT="$SEARCH_DIR"
     break
   fi
   SEARCH_DIR=$(dirname "$SEARCH_DIR")
 done
-if [[ -z "$VAULT_ROOT" && -d "$SEARCH_DIR/.claude" ]]; then
+if [[ -z "$VAULT_ROOT" ]] && has_catalog "$SEARCH_DIR"; then
   VAULT_ROOT="$SEARCH_DIR"
 fi
 [[ -n "$VAULT_ROOT" ]] || finish

@@ -21,6 +21,7 @@ class PiExtensionTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.plain = self.tmp / "plain"
         (self.plain / ".claude").mkdir(parents=True)
+        (self.plain / ".claude/index.md").write_text("# catalog\n")  # a built catalog marks a vault
         self.vault = self.tmp / "vault"
         (self.vault / "docs/knowledge").mkdir(parents=True)
         (self.vault / "docs/knowledge/scope.json").write_text('{"version": 1, "domains": {"cs": "111.cs"}}')

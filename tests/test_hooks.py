@@ -34,8 +34,9 @@ def agy(tool, path, workspace, content="x"):
 class HookTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
-        self.plain = self.tmp / "plain"  # a zkfied folder (.claude/) without the legacy layout
+        self.plain = self.tmp / "plain"  # a zkfied folder (a built catalog in .claude/) without the legacy layout
         (self.plain / ".claude").mkdir(parents=True)
+        (self.plain / ".claude/index.md").write_text("# catalog\n")
         (self.plain / "raw").mkdir()
         self.vault = self.tmp / "vault"  # a configured vault
         (self.vault / "docs/knowledge").mkdir(parents=True)
@@ -187,6 +188,17 @@ class HookTest(unittest.TestCase):
         for path in (self.plain / "raw/x.md", self.plain / "a.txt", self.legacy / "cs/note.md"):
             with self.subTest(path=path.name):
                 self.assertEqual(self.signal(claude("Write", path), self.tmp), (None, ""))
+
+    def test_a_bare_claude_folder_is_no_vault(self):
+        # a repo or a home folder keeps settings in .claude/; only a built catalog marks a vault
+        bare, built = self.tmp / "bare", self.tmp / "built"
+        (bare / ".claude").mkdir(parents=True)
+        (bare / ".claude/settings.json").write_text("{}")
+        (built / ".claude/index").mkdir(parents=True)
+        (built / ".claude/index/manifest.json").write_text("{}")
+        self.assertEqual(self.signal(claude("Write", bare / "notes/note.md"), self.tmp), (None, ""))
+        out, _ = self.signal(claude("Write", built / "notes/note.md"), self.tmp)
+        self.assertIn("vault-knowledge build", out["hookSpecificOutput"]["additionalContext"])
 
     # Antigravity's shape: run from the plugin root, the workspace stands in for the cwd
 

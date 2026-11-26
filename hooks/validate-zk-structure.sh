@@ -1,15 +1,18 @@
 #!/bin/bash
 # PreToolUse guard for Zettelkasten notes. A configured vault (docs/knowledge/scope.json above
 # the note) decides through scripts/knowledge-hook.py and is never redirected; elsewhere the
-# legacy layout check sends a note to ./output/ when the working directory is no vault.
+# legacy layout check sends a new note to ./output/ when the working directory is no vault.
+# A note is told by what is written: frontmatter holding Type: and Categories:, the keys lint
+# requires. Any other Markdown (a repo's docs, a skill, a PR body) and every edit of a file
+# that exists stay where they are.
 #
 # Two input shapes on stdin, told apart by the toolCall key:
 #   Claude Code, Codex and Pi's extension (extensions/zkfy.ts):
-#     {tool_name: Write|Edit, tool_input: {file_path}}; the cwd is the session's.
+#     {tool_name: Write|Edit, tool_input: {file_path, content}}; the cwd is the session's.
 #     Output: nothing to allow, else Claude Code's hookSpecificOutput (a deny, an updatedInput,
 #     an additionalContext), which Codex shares and the Pi extension translates.
 #   Antigravity (the root hooks.json):
-#     {toolCall: {name, args: {TargetFile}}, workspacePaths}; the cwd is the plugin root, so the
+#     {toolCall: {name, args: {TargetFile, CodeContent}}, workspacePaths}; the cwd is the plugin root, so the
 #     first workspace stands in for the working directory.
 #     Output: {decision: allow|deny, reason?, overwrite?}. Antigravity's PostToolUse returns
 #     nothing to the agent, so the catalog reminder of signal-index-update.sh rides on the
@@ -33,6 +36,14 @@ else
 fi
 
 required_folders=("cs" "web" "ai" "principle" "devops" "math" "000.Index" "row")
+
+writes_a_note() {  # whether the call writes a whole file whose frontmatter is a note's; an edit carries none
+  printf '%s' "$input" | jq -e '
+    (.toolCall.args.CodeContent // .tool_input.content // "") | tostring
+    | split("\n") | map(rtrimstr("\r"))
+    | if .[0] == "---" then .[1:] | .[:(index("---") // 0)] else [] end
+    | any(startswith("Type:")) and any(startswith("Categories:"))' >/dev/null 2>&1
+}
 
 allow() {  # $1: words for the agent, optional
   if [[ "$cli" == agy ]]; then
@@ -83,8 +94,9 @@ elif [[ $status -ne 3 ]]; then
   allow
 fi
 
-# Legacy vaults: the layout check on the working directory
+# Legacy vaults: the layout check on the working directory, for a note being written
 [[ -n "$workspace" ]] || allow
+writes_a_note || allow
 for folder in "${required_folders[@]}"; do
   if [[ ! -d "$workspace/$folder" ]]; then
     mkdir -p "$workspace/output"

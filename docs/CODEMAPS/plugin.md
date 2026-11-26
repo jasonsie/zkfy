@@ -94,7 +94,7 @@ All eight declare `model: inherit`; skills delegate by having a general subagent
 
 | Event | Script | Purpose |
 |-------|--------|---------|
-| PreToolUse (Write/Edit .md) | `validate-zk-structure.sh` | A configured vault decides (deny for `raw/`); elsewhere redirect notes to `/output` if the vault structure is invalid |
+| PreToolUse (Write/Edit .md) | `validate-zk-structure.sh` | A configured vault decides (deny for `raw/`); elsewhere, when the working directory is no vault, a new note (frontmatter with `Type:` and `Categories:`) goes to `./output/`; other Markdown and edits are left where they are |
 | PostToolUse (Write .md) | `signal-index-update.sh` | Remind about separate catalog maintenance after note writes (structure-based vault detection) |
 
 One script per event, three ways in: `hooks/hooks.json` (Claude Code and Codex, `"${CLAUDE_PLUGIN_ROOT}"` quoted), the root `hooks.json` (Antigravity: relative paths, the plugin root as cwd, `toolCall.args.TargetFile`; its PostToolUse returns nothing to the agent, so the reminder rides on the PreToolUse allow) and `extensions/zkfy.ts` (Pi: `tool_call` and `tool_result` around `write` and `edit`, in Claude Code's shape). Each script tells the two payload shapes apart by the `toolCall` key; `tests/test_hooks.py` and `tests/test_pi_extension.py` cover them.

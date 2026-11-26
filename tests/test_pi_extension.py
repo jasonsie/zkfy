@@ -12,6 +12,7 @@ ROOT = Path(__file__).parents[1]
 EXTENSION = ROOT / "extensions/zkfy.ts"
 HARNESS = ROOT / "tests/pi_extension_harness.mjs"
 NODE = shutil.which("node")
+NOTE = "---\nDate: 2026-11-23\nType: literature\nCategories: [CS]\n---\n### Abstract\nx\n"  # a note, by its frontmatter
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -28,8 +29,8 @@ class PiExtensionTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
-    def replay(self, cwd, note):
-        proc = subprocess.run([NODE, str(HARNESS), str(EXTENSION), str(cwd), str(note)],
+    def replay(self, cwd, note, content="# note\n"):
+        proc = subprocess.run([NODE, str(HARNESS), str(EXTENSION), str(cwd), str(note), content],
                               capture_output=True, text=True, timeout=60)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return json.loads(proc.stdout.strip().splitlines()[-1])
@@ -42,7 +43,7 @@ class PiExtensionTest(unittest.TestCase):
         self.assertEqual(got["calls"][0]["config"]["url"], url)
 
     def test_a_note_outside_a_vault_moves_to_output_and_the_result_carries_both_notes(self):
-        got = self.replay(self.plain, self.plain / "note.md")
+        got = self.replay(self.plain, self.plain / "note.md", NOTE)
         self.assertEqual(got["path"], str(self.plain / "output/note.md"))
         self.assertIsNone(got["onCall"])
         texts = [c["text"] for c in got["onResult"]["content"] if c["type"] == "text"]
@@ -61,6 +62,12 @@ class PiExtensionTest(unittest.TestCase):
         self.assertEqual(got["path"], str(self.plain / "a.txt"))
         self.assertIsNone(got["onCall"])
         self.assertIsNone(got["onResult"])
+
+    def test_ordinary_markdown_outside_a_vault_stays_where_it_is(self):
+        got = self.replay(self.plain, self.plain / "docs/plan.md", "# Plan\n")
+        self.assertEqual(got["path"], str(self.plain / "docs/plan.md"))
+        self.assertIsNone(got["onCall"])
+        self.assertFalse((self.plain / "output").exists())
 
 
 if __name__ == "__main__":

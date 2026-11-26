@@ -1,6 +1,7 @@
 // Pi extension for zkfy. Pi loads no plugin hooks and no plugin MCP server, so this one file
 // plays both: it runs the plugin's two hook scripts around Pi's write and edit tools, in the
-// shape Claude Code gives them (tool_name Write|Edit, tool_input.file_path), and registers the
+// shape Claude Code gives them (tool_name Write|Edit, tool_input.file_path and, for a write, its
+// content, by which the guard tells a note from other Markdown), and registers the
 // Notion server that .mcp.json and mcp_config.json name for the other CLIs. Pi loads it from
 // extensions/ by convention; the plugin root is one folder up. A failing script never blocks a
 // session on its own.
@@ -46,7 +47,7 @@ export default function (pi: any) {
     const path = notePath(event.input?.path);
     if (!tool || !path) return;
     const cwd = ctx?.cwd ?? process.cwd();
-    const payload = { session_id: ctx?.sessionManager?.getSessionId?.(), cwd, tool_name: tool, tool_input: { file_path: path } };
+    const payload = { session_id: ctx?.sessionManager?.getSessionId?.(), cwd, tool_name: tool, tool_input: { file_path: path, content: event.input?.content } };
     const out = hook("validate-zk-structure.sh", payload, cwd)?.hookSpecificOutput;
     const call = { tool, path, said: out?.additionalContext };
     calls.set(event.toolCallId, call);

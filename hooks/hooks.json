@@ -10,7 +10,7 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/validate-zk-structure.sh\""
           }
         ],
-        "description": "Respect scoped vault policy without redirecting files; preserve legacy checks for unconfigured vaults"
+        "description": "Respect scoped vault policy without redirecting files; outside a vault, send only a new note (by its frontmatter) inside the session's cwd to ./output/, never an existing file"
       }
     ],
     "PostToolUse": [

@@ -104,14 +104,14 @@ claude plugin marketplace add jasonsie/web-clipper
 /plugin install zkfy --marketplace jasonsie/zkfy
 
 # Codex
-codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.9.1
+codex plugin marketplace add jasonsie/zkfy --ref zkfy--v1.9.2
 codex plugin add zkfy@zkfy-marketplace
 
 # Pi
-pi install git:github.com/jasonsie/zkfy@zkfy--v1.9.1
+pi install git:github.com/jasonsie/zkfy@zkfy--v1.9.2
 
 # Antigravity
-agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.9.1
+agy plugin install https://github.com/jasonsie/zkfy/tree/zkfy--v1.9.2
 ```
 
 Without ai-dotfiles, put the plugin's `bin/vault-knowledge` on your PATH yourself; Claude Code
@@ -438,8 +438,10 @@ agy plugin validate --strict .      # three warnings by design, see Support by C
 /zkfy:query-to-note "How does X compare to Y?"
 /zkfy:vault-lint 333.ai/
 
-# One hook script, both payload shapes, by hand
-printf '{"tool_name":"Write","tool_input":{"file_path":"%s/note.md"}}' "$PWD" | hooks/validate-zk-structure.sh
+# One hook script, both payload shapes, by hand: outside a vault a new note (frontmatter with Type:
+# and Categories:) inside the payload's cwd goes to ./output/; any other Markdown, every edit, every
+# write over an existing file and every path outside the cwd prints nothing and stays
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s/note.md","content":"---\\nType: literature\\nCategories: [CS]\\n---\\n"}}' "$PWD" "$PWD" | hooks/validate-zk-structure.sh
 ```
 
 ### Modifying Agents

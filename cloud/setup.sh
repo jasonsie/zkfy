@@ -17,7 +17,7 @@
 # broken environment says what is missing instead of running half a pipeline.
 set -u
 
-ZKFY_REF="${ZKFY_REF:-zkfy--v1.9.1}"
+ZKFY_REF="${ZKFY_REF:-zkfy--v1.9.2}"
 WEB_CLIPPER_REF="${WEB_CLIPPER_REF:-web-clipper--v2.2.1}"
 CLIPPER_CLI_REF="${CLIPPER_CLI_REF:-6d56d61}" # obsidianmd/obsidian-clipper, at or after 5315b30
 ROOT=/opt/ai-plugins

@@ -438,9 +438,10 @@ agy plugin validate --strict .      # three warnings by design, see Support by C
 /zkfy:query-to-note "How does X compare to Y?"
 /zkfy:vault-lint 333.ai/
 
-# One hook script, both payload shapes, by hand: outside a vault a note (frontmatter with Type: and
-# Categories:) goes to ./output/; any other Markdown, and every edit, prints nothing and stays
-printf '{"tool_name":"Write","tool_input":{"file_path":"%s/note.md","content":"---\\nType: literature\\nCategories: [CS]\\n---\\n"}}' "$PWD" | hooks/validate-zk-structure.sh
+# One hook script, both payload shapes, by hand: outside a vault a new note (frontmatter with Type:
+# and Categories:) inside the payload's cwd goes to ./output/; any other Markdown, every edit, every
+# write over an existing file and every path outside the cwd prints nothing and stays
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s/note.md","content":"---\\nType: literature\\nCategories: [CS]\\n---\\n"}}' "$PWD" "$PWD" | hooks/validate-zk-structure.sh
 ```
 
 ### Modifying Agents

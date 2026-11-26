@@ -92,9 +92,47 @@ class HookTest(unittest.TestCase):
 
     def test_an_edit_is_never_redirected(self):
         # the file is where it is: a redirected Edit would look for it in output/ and fail
+        (self.plain / "note.md").write_text(NOTE)
         edit = {"tool_name": "Edit", "tool_input": {"file_path": str(self.plain / "note.md"), "old_string": NOTE, "new_string": NOTE + "y"}}
         self.assertIsNone(self.guard(edit, self.plain))
+        # whatever an edit carries, it never moves a note
+        edit["tool_input"] = {"file_path": str(self.plain / "other.md"), "content": NOTE}
+        self.assertIsNone(self.guard(edit, self.plain))
         self.assertFalse((self.plain / "output").exists())
+
+    def test_a_write_over_an_existing_file_is_never_redirected(self):
+        (self.plain / "note.md").write_text("# old\n")
+        self.assertIsNone(self.guard(claude("Write", self.plain / "note.md", NOTE), self.plain))
+        self.assertFalse((self.plain / "output").exists())
+
+    def test_a_relative_path_is_the_sessions_not_the_hooks(self):
+        (self.plain / "old.md").write_text("# old\n")
+        self.assertIsNone(self.guard({"tool_name": "Write", "tool_input": {"file_path": "old.md", "content": NOTE}}, self.plain, proc=self.tmp))
+        out = self.guard({"tool_name": "Write", "tool_input": {"file_path": "new.md", "content": NOTE}}, self.plain, proc=self.tmp)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"]["file_path"], str(self.plain / "output/new.md"))
+        self.assertFalse((self.tmp / "output").exists())
+
+    def test_a_path_outside_the_root_passes_untouched(self):
+        # the repro: a PR body in a session's scratchpad, far from the worktree the session runs in
+        main, linked = self.worktree()
+        pr_body = self.tmp / "scratch/project/session/scratchpad/pr-body.md"
+        self.assertIsNone(self.guard(claude("Write", pr_body, "## Summary\n\nFixes it.\n"), linked, proc=linked))
+        self.assertFalse(pr_body.parent.exists())
+        for path, content in ((pr_body, NOTE), (self.plain / "../elsewhere/note.md", NOTE), (self.tmp / "repo/note.md", NOTE)):
+            with self.subTest(path=str(path)):
+                self.assertIsNone(self.guard(claude("Write", path, content), linked, proc=linked))
+        for folder in (linked, main, self.tmp):
+            self.assertFalse((folder / "output").exists())
+
+    def test_inside_or_outside_is_told_by_real_path(self):
+        # macOS reaches /private/tmp as /tmp: the root and the file may name one place two ways
+        link = self.tmp / "link"
+        link.symlink_to(self.plain)
+        out = self.guard(claude("Write", self.plain / "note.md", NOTE), link, proc=self.plain)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"]["file_path"], str(link / "output/note.md"))
+        out = self.guard(claude("Write", link / "docs/note.md", NOTE), self.plain)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"]["file_path"], str(self.plain / "output/note.md"))
+        self.assertIsNone(self.guard(claude("Write", self.plain / "docs/../../elsewhere/note.md", NOTE), self.plain))
 
     def test_the_root_is_the_payloads_cwd_not_the_hooks_pwd(self):
         # a linked worktree is a .git file, not a folder: the session's cwd still names its root
@@ -163,6 +201,12 @@ class HookTest(unittest.TestCase):
         edit = {"toolCall": {"name": "replace_file_content", "args": {"TargetFile": str(self.plain / "note.md"), "ReplacementContent": NOTE}},
                 "workspacePaths": [str(self.plain)], "conversationId": "t"}
         self.assertEqual(self.guard(edit, ROOT), {"decision": "allow"})
+        self.assertFalse((self.plain / "output").exists())
+
+    def test_antigravity_never_moves_an_existing_file_or_a_path_outside_the_workspace(self):
+        (self.plain / "old.md").write_text("# old\n")
+        self.assertEqual(self.guard(agy("write_to_file", self.plain / "old.md", self.plain, NOTE), ROOT), {"decision": "allow"})
+        self.assertEqual(self.guard(agy("write_to_file", self.tmp / "elsewhere/pr.md", self.plain, NOTE), ROOT), {"decision": "allow"})
         self.assertFalse((self.plain / "output").exists())
 
     def test_antigravity_allows_other_tools_legacy_vaults_and_unknown_workspaces(self):

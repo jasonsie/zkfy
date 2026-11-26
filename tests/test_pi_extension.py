@@ -69,6 +69,17 @@ class PiExtensionTest(unittest.TestCase):
         self.assertIsNone(got["onCall"])
         self.assertFalse((self.plain / "output").exists())
 
+    def test_a_note_outside_the_cwd_or_over_an_existing_file_stays_where_it_is(self):
+        outside = self.tmp / "scratch/pr-body.md"
+        got = self.replay(self.plain, outside, NOTE)
+        self.assertEqual(got["path"], str(outside))
+        self.assertIsNone(got["onCall"])
+        (self.plain / "old.md").write_text("# old\n")
+        got = self.replay(self.plain, self.plain / "old.md", NOTE)
+        self.assertEqual(got["path"], str(self.plain / "old.md"))
+        self.assertFalse((self.plain / "output").exists())
+        self.assertFalse((self.tmp / "scratch").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

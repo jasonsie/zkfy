@@ -1,6 +1,7 @@
 """The two hook scripts in the shapes each CLI sends: Claude Code's, which Codex and the Pi
 extension share, and Antigravity's. Run: python3 -B -m unittest discover -s tests -p 'test_hooks.py' -v"""
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -48,10 +49,23 @@ class HookTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
-    def guard(self, payload, cwd):
-        code, out, _ = run("validate-zk-structure.sh", payload, cwd)
+    def guard(self, payload, cwd, proc=None, send_cwd=True):
+        # Claude Code's payload carries the session's cwd; the process runs there unless `proc` says otherwise
+        if send_cwd and "toolCall" not in payload:
+            payload = {**payload, "cwd": str(cwd)}
+        code, out, _ = run("validate-zk-structure.sh", payload, proc or cwd)
         self.assertEqual(code, 0)
         return json.loads(out) if out else None
+
+    def worktree(self):
+        """A git repository and a linked worktree of it, whose .git is a file."""
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        main, linked = self.tmp / "repo", self.tmp / "repo-wt"
+        for args in (["init", "-q", str(main)],
+                     ["-C", str(main), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"],
+                     ["-C", str(main), "worktree", "add", "-q", str(linked)]):
+            subprocess.run(["git", *args], check=True, capture_output=True, env=env)
+        return main, linked
 
     def signal(self, payload, cwd):
         code, out, err = run("signal-index-update.sh", payload, cwd)
@@ -81,6 +95,31 @@ class HookTest(unittest.TestCase):
         edit = {"tool_name": "Edit", "tool_input": {"file_path": str(self.plain / "note.md"), "old_string": NOTE, "new_string": NOTE + "y"}}
         self.assertIsNone(self.guard(edit, self.plain))
         self.assertFalse((self.plain / "output").exists())
+
+    def test_the_root_is_the_payloads_cwd_not_the_hooks_pwd(self):
+        # a linked worktree is a .git file, not a folder: the session's cwd still names its root
+        main, linked = self.worktree()
+        out = self.guard(claude("Write", linked / "note.md", NOTE), linked, proc=main)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"]["file_path"], str(linked / "output/note.md"))
+        self.assertTrue((linked / "output").is_dir())
+        self.assertFalse((main / "output").exists())
+        self.assertFalse((self.tmp / "output").exists())
+
+    def test_without_a_cwd_the_root_is_the_repo_holding_the_file(self):
+        main, linked = self.worktree()
+        out = self.guard(claude("Write", linked / "docs/new/note.md", NOTE), linked, proc=self.tmp, send_cwd=False)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"]["file_path"], str(linked / "output/note.md"))
+        self.assertFalse((main / "output").exists())
+        self.assertFalse((self.tmp / "output").exists())
+
+    def test_without_a_cwd_or_a_repo_nothing_is_redirected(self):
+        # the hook's own pwd is no stand-in: a note in a plain folder stays put
+        self.assertIsNone(self.guard(claude("Write", self.plain / "note.md", NOTE), self.plain, proc=self.plain, send_cwd=False))
+        self.assertFalse((self.plain / "output").exists())
+
+    def test_a_cwd_that_is_no_folder_redirects_nothing(self):
+        self.assertIsNone(self.guard(claude("Write", self.plain / "note.md", NOTE), self.tmp / "gone", proc=self.plain))
+        self.assertFalse((self.tmp / "gone").exists())
 
     def test_a_note_in_a_legacy_vault_passes_silently(self):
         self.assertIsNone(self.guard(claude("Edit", self.legacy / "cs/note.md"), self.legacy))

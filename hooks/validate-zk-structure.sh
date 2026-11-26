@@ -8,7 +8,9 @@
 #
 # Two input shapes on stdin, told apart by the toolCall key:
 #   Claude Code, Codex and Pi's extension (extensions/zkfy.ts):
-#     {tool_name: Write|Edit, tool_input: {file_path, content}}; the cwd is the session's.
+#     {tool_name: Write|Edit, cwd, tool_input: {file_path, content}}; the root is the payload's
+#     cwd (the session's, so a git worktree resolves to itself), else the git work tree holding
+#     the file, never the hook's own pwd. With neither, nothing is redirected.
 #     Output: nothing to allow, else Claude Code's hookSpecificOutput (a deny, an updatedInput,
 #     an additionalContext), which Codex shares and the Pi extension translates.
 #   Antigravity (the root hooks.json):
@@ -31,7 +33,7 @@ else
   cli=claude
   tool=$(printf '%s' "$input" | jq -r '.tool_name // .tool // empty')
   file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
-  workspace=$(pwd)
+  workspace=$(printf '%s' "$input" | jq -r '.cwd // empty')
   edit_tools='^(Write|Edit)$'
 fi
 
@@ -43,6 +45,13 @@ writes_a_note() {  # whether the call writes a whole file whose frontmatter is a
     | split("\n") | map(rtrimstr("\r"))
     | if .[0] == "---" then .[1:] | .[:(index("---") // 0)] else [] end
     | any(startswith("Type:")) and any(startswith("Categories:"))' >/dev/null 2>&1
+}
+
+repo_root_of() {  # $1: an absolute path; the git work tree holding it, though the file or its folders may not exist yet
+  local dir
+  dir=$(dirname "$1")
+  while [[ ! -d "$dir" && "$dir" != "/" ]]; do dir=$(dirname "$dir"); done
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null
 }
 
 allow() {  # $1: words for the agent, optional
@@ -95,7 +104,10 @@ elif [[ $status -ne 3 ]]; then
 fi
 
 # Legacy vaults: the layout check on the working directory, for a note being written
-[[ -n "$workspace" ]] || allow
+if [[ -z "$workspace" && "$file_path" == /* ]]; then  # no cwd sent: the repo the file is in
+  workspace=$(repo_root_of "$file_path")
+fi
+[[ -n "$workspace" && -d "$workspace" ]] || allow
 writes_a_note || allow
 for folder in "${required_folders[@]}"; do
   if [[ ! -d "$workspace/$folder" ]]; then
